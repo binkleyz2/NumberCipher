@@ -59,7 +59,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
       - name: Compatibility self-tests
         run: dotnet run --project windows/InteropTest -c Release
       - name: Build x64 and ARM64 (full and small editions)
@@ -72,7 +72,7 @@ jobs:
               -p:Version=${{ needs.check.outputs.version }} \
               -o out/$arch
             cp out/$arch/NumberCipher.exe NumberCipher-Windows-$arch.exe
-            # Small: uses the PC's installed .NET Desktop Runtime (8 or newer).
+            # Small: uses the PC's installed .NET Desktop Runtime (10 or newer).
             dotnet publish windows/NumberCipher.Windows -c Release -r win-$arch --self-contained false \
               -p:PublishSingleFile=true \
               -p:Version=${{ needs.check.outputs.version }} \
@@ -107,7 +107,7 @@ jobs:
           | `NumberCipher-macOS-arm64.zip` | Mac with Apple Silicon (M1–M4 and newer), macOS 14+ |
           | `NumberCipher-Windows-x64.exe` | Most Windows 10/11 PCs (Intel or AMD) |
           | `NumberCipher-Windows-arm64.exe` | Windows on ARM (Snapdragon, Surface Pro X, etc.) |
-          | `NumberCipher-Windows-x64-small.exe` | Small edition for Intel/AMD PCs that have the [.NET Desktop Runtime](https://dotnet.microsoft.com/download/dotnet) 8 or newer installed |
+          | `NumberCipher-Windows-x64-small.exe` | Small edition for Intel/AMD PCs that have the [.NET Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) 10 or newer installed |
           | `NumberCipher-Windows-arm64-small.exe` | Small edition for Windows on ARM, same requirement |
           | `recover.py` | Decrypts codes on any computer with Python (`pip3 install cryptography`) |
 

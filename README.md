@@ -17,7 +17,7 @@ open "build/Number Cipher.app"
 
 ## Build — Windows
 
-Requires the [.NET 8 SDK](https://dotnet.microsoft.com/download). From the repo folder:
+Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). From the repo folder:
 
 ```powershell
 dotnet publish windows/NumberCipher.Windows -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o out
