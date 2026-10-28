@@ -1,10 +1,13 @@
 name: Release
 
-# Builds Number Cipher.app on an Apple Silicon runner and publishes it as a
-# GitHub Release whenever a version tag (e.g. v1.0.0) is pushed.
+# Builds Number Cipher.app on an Apple Silicon runner and publishes a GitHub
+# Release. To cut a new release, change the number in VERSION and push to main
+# (or run this workflow by hand from the Actions tab).
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+    paths: [VERSION]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,20 +18,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Read version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v$(tr -d '[:space:]' < VERSION)"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; nothing to do."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build app
+        if: steps.version.outputs.exists != 'true'
         run: |
           chmod +x build.sh
           ./build.sh
 
       - name: Package
+        if: steps.version.outputs.exists != 'true'
         run: |
           ditto -c -k --keepParent "build/Number Cipher.app" NumberCipher-macOS-arm64.zip
           shasum -a 256 NumberCipher-macOS-arm64.zip > NumberCipher-macOS-arm64.zip.sha256
           cat NumberCipher-macOS-arm64.zip.sha256
 
       - name: Publish release
+        if: steps.version.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
           cat > notes.md <<'EOF'
           **Download:** `NumberCipher-macOS-arm64.zip` (Apple Silicon, macOS 14+)
@@ -38,9 +57,10 @@ jobs:
 
           `recover.py` decrypts codes without the app (`pip3 install cryptography`).
           EOF
-          gh release create "$GITHUB_REF_NAME" \
+          gh release create "$TAG" \
             NumberCipher-macOS-arm64.zip \
             NumberCipher-macOS-arm64.zip.sha256 \
             recover.py \
-            --title "Number Cipher $GITHUB_REF_NAME" \
+            --target "$GITHUB_SHA" \
+            --title "Number Cipher $TAG" \
             --notes-file notes.md

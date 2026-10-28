@@ -41,3 +41,7 @@ python3 recover.py decrypt "ABPJB MHPDB ..."
 ```
 
 Keep a copy of it with your backups so your codes never depend on this one app.
+
+## Releases
+
+Download the prebuilt app from the repo's **Releases** page. To publish a new release, change the number in `VERSION` and push to `main`; GitHub builds the app on an Apple Silicon Mac and attaches it automatically.
