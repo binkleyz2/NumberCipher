@@ -1,8 +1,8 @@
 name: Release
 
-# Builds Number Cipher.app on an Apple Silicon runner and publishes a GitHub
-# Release. To cut a new release, change the number in VERSION and push to main
-# (or run this workflow by hand from the Actions tab).
+# Builds the Mac app (Apple Silicon) and the Windows app (x64 + ARM64), then
+# publishes them together as one GitHub Release. To cut a new release, change
+# the number in VERSION and push to main (or run this workflow from the Actions tab).
 on:
   push:
     branches: [main]
@@ -13,54 +13,105 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: macos-latest   # Apple Silicon (arm64) runner
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+      exists: ${{ steps.version.outputs.exists }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Read version
-        id: version
+      - id: version
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="v$(tr -d '[:space:]' < VERSION)"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists; nothing to do."
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "Release v$VERSION already exists; nothing to do."
             echo "exists=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build app
-        if: steps.version.outputs.exists != 'true'
-        run: |
+  mac:
+    needs: check
+    if: needs.check.outputs.exists != 'true'
+    runs-on: macos-latest   # Apple Silicon (arm64)
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
           chmod +x build.sh
           ./build.sh
-
-      - name: Package
-        if: steps.version.outputs.exists != 'true'
-        run: |
           ditto -c -k --keepParent "build/Number Cipher.app" NumberCipher-macOS-arm64.zip
-          shasum -a 256 NumberCipher-macOS-arm64.zip > NumberCipher-macOS-arm64.zip.sha256
-          cat NumberCipher-macOS-arm64.zip.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: NumberCipher-macOS-arm64.zip
 
+  windows:
+    needs: check
+    if: needs.check.outputs.exists != 'true'
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Compatibility self-tests
+        run: dotnet run --project windows/InteropTest -c Release
+      - name: Build x64 and ARM64
+        run: |
+          for arch in x64 arm64; do
+            dotnet publish windows/NumberCipher.Windows -c Release -r win-$arch --self-contained \
+              -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+              -p:EnableCompressionInSingleFile=true -p:PublishReadyToRun=true \
+              -p:Version=${{ needs.check.outputs.version }} \
+              -o out/$arch
+            cp out/$arch/NumberCipher.exe NumberCipher-Windows-$arch.exe
+          done
+          ls -l NumberCipher-Windows-*.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: NumberCipher-Windows-*.exe
+
+  publish:
+    needs: [check, mac, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
       - name: Publish release
-        if: steps.version.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.version.outputs.tag }}
+          TAG: ${{ needs.check.outputs.tag }}
         run: |
+          cp recover.py dist/
+          (cd dist && sha256sum NumberCipher-* recover.py > SHA256SUMS.txt && cat SHA256SUMS.txt)
           cat > notes.md <<'EOF'
-          **Download:** `NumberCipher-macOS-arm64.zip` (Apple Silicon, macOS 14+)
+          | Download | For |
+          |---|---|
+          | `NumberCipher-macOS-arm64.zip` | Mac with Apple Silicon (M1–M4 and newer), macOS 14+ |
+          | `NumberCipher-Windows-x64.exe` | Most Windows 10/11 PCs (Intel or AMD) |
+          | `NumberCipher-Windows-arm64.exe` | Windows on ARM (Snapdragon, Surface Pro X, etc.) |
+          | `recover.py` | Decrypts codes on any computer with Python (`pip3 install cryptography`) |
 
-          The app is self-signed, not notarized by Apple. The first time you open it,
-          right-click **Number Cipher.app** and choose **Open**, then confirm.
+          Codes are interchangeable: anything encrypted on the Mac decrypts on Windows and vice versa.
 
-          `recover.py` decrypts codes without the app (`pip3 install cryptography`).
+          **First launch.** Neither app is signed by Apple or Microsoft yet.
+          - Mac: right-click **Number Cipher.app** → **Open**, then confirm.
+          - Windows: if SmartScreen appears, click **More info** → **Run anyway**.
+
+          `SHA256SUMS.txt` lets you confirm a download wasn't altered.
           EOF
-          gh release create "$TAG" \
-            NumberCipher-macOS-arm64.zip \
-            NumberCipher-macOS-arm64.zip.sha256 \
-            recover.py \
+          gh release create "$TAG" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Number Cipher $TAG" \
             --notes-file notes.md

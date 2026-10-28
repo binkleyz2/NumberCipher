@@ -33,9 +33,11 @@ jobs:
           pip install --quiet cryptography
           T="dotnet windows/InteropTest/bin/Release/net8.0/InteropTest.dll"
           py=$(python -c "import recover as r; print(r.encrypt('6011 0009 9013 9424', 'maple orbit tundra swivel', rounds=300000))")
-          [ "$($T decrypt "$py" | tr -d '\r')" = "6011 0009 9013 9424" ] && echo "PASS python -> windows"
+          got=$($T decrypt "$py" | tr -d '\r')
+          if [ "$got" = "6011 0009 9013 9424" ]; then echo "PASS python -> windows"; else echo "FAIL python -> windows: '$got'"; exit 1; fi
           cs=$($T encrypt 300000 "8675309" | tr -d '\r')
-          [ "$(python -c "import recover as r,sys; print(r.decrypt(sys.argv[1], 'maple orbit tundra swivel'))" "$cs" | tr -d '\r')" = "8675309" ] && echo "PASS windows -> python"
+          got=$(python -c "import recover as r,sys; print(r.decrypt(sys.argv[1], 'maple orbit tundra swivel'))" "$cs" | tr -d '\r')
+          if [ "$got" = "8675309" ]; then echo "PASS windows -> python"; else echo "FAIL windows -> python: '$got'"; exit 1; fi
 
       - name: Build app (x64 and ARM64)
         run: |
