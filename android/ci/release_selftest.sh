@@ -9,7 +9,7 @@ adb install "$APK" || exit 1
 adb logcat -c
 adb shell am start -W -n $PKG/.MainActivity --ez nc_selftest true
 for i in $(seq 1 60); do
-  line=$(adb logcat -d -s NumberCipher:I NumberCipher:E | grep SELFTEST | tail -1)
+  line=$(adb logcat -d -s NumberCipher:I | grep SELFTEST | tail -1)
   if [ -n "$line" ]; then
     echo "$line"
     case "$line" in *PASS*) exit 0;; *) adb logcat -d -s NumberCipher:* AndroidRuntime:E | tail -40; exit 1;; esac
