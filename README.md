@@ -57,7 +57,7 @@ Because each code stores its round count, a code made on a fast device takes pro
 ## Use
 
 - **Encrypt:** type numbers (digits, spaces, commas, periods, dashes, line breaks), enter a passphrase twice, press ⌘↩ (Ctrl+Enter on Windows). Copy the letter code.
-- **Decrypt:** paste the letter code, enter the passphrase, press ⌘↩ (Ctrl+Enter). Spaces and case in the code don't matter.
+- **Decrypt:** paste the letter code, enter the passphrase, press ⌘↩ (Ctrl+Enter). Spaces and capitalization in the letter code don't matter (it only uses capital letters A–R). The passphrase is case-sensitive: it must match exactly.
 - Copied results are hidden from clipboard managers (and from Windows clipboard history and cloud sync, and Android's clipboard preview) and cleared from the clipboard after 60 seconds.
 - Android only: **Paste** and **Share** buttons (Share sends only the letter code, never the numbers), and the app blocks screenshots and hides its contents in the recent-apps view.
 
