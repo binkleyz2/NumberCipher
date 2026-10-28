@@ -69,8 +69,12 @@ def decrypt(code: str, pw: str) -> str:
         rounds = struct.unpack(">I", b[1:5])[0]
         if not 100_000 <= rounds <= MAX_ROUNDS:
             raise ValueError("That doesn't look like a Number Cipher code.")
+    elif b[0] == 0:
+        raise ValueError("That doesn't look like a Number Cipher code.")
+    elif b[0] < 16:  # future versions all start with "A"
+        raise ValueError("This code was made by a newer version of Number Cipher. Update this app to decrypt it.")
     else:
-        raise ValueError("Unsupported code version.")
+        raise ValueError("The first letter of a code is always A. Check the start of the code for a typo.")
     header, salt = b[:hlen], b[hlen - SALT:hlen]
     nonce, ct = b[hlen:hlen + 12], b[hlen + 12:]
     return AESGCM(key(pw, salt, rounds)).decrypt(nonce, ct, header).rstrip(b"\0").decode()

@@ -163,8 +163,14 @@ public static class CipherEngine
                 uint r = BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(1, 4));
                 if (r < 100_000 || r > MaxRounds) throw Malformed();
                 return (5 + SaltLength, (int)r);
+            case 0:
+                throw Malformed();
+            case < 16:
+                // Future format versions all start with "A" (byte < 16).
+                throw new CipherException("This code was made by a newer version of Number Cipher. Update this app to decrypt it.");
             default:
-                throw new CipherException("This code was made by a newer version of Number Cipher.");
+                // A first letter other than "A" can't be any version: it's a typo.
+                throw new CipherException("The first letter of a code is always A. Check the start of the code for a typo.");
         }
     }
 

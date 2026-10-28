@@ -35,7 +35,8 @@ char[] t = c.ToCharArray(); int k = 60; t[k] = t[k] == 'A' ? 'B' : 'A';
 Check("altered letter rejected", Throws(() => CipherEngine.Decrypt(new string(t), pass), "Wrong passphrase"));
 Check("letters outside alphabet rejected", Throws(() => CipherEngine.Decrypt("ABCXZ", pass), "doesn't look like"));
 Check("non-number input rejected", Throws(() => CipherEngine.Encrypt("12a", pass), "Only digits"));
-Check("unknown version rejected", Throws(() => CipherEngine.Decrypt("PP" + c[2..], pass), "newer version"));
+Check("changed first letter reported as typo", Throws(() => CipherEngine.Decrypt("B" + c[1..], pass), "always A"));
+Check("future version (AD...) reported as newer", Throws(() => CipherEngine.Decrypt("AD" + c[2..], pass), "newer version"));
 
 var sw = System.Diagnostics.Stopwatch.StartNew();
 int rounds = CipherEngine.CalibratedRounds;

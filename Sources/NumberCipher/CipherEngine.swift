@@ -16,7 +16,7 @@ import Security
 /// Both: plaintext padded with 0x00 to a multiple of 16 bytes; each byte -> two letters
 /// from "ABCDEFGHJKLMNPQR" (no I or O).
 enum CipherError: LocalizedError {
-    case invalidNumbers, noDigits, emptyPassphrase, malformedCode, unsupportedVersion, authenticationFailed, internalError
+    case invalidNumbers, noDigits, emptyPassphrase, malformedCode, badFirstLetter, unsupportedVersion, authenticationFailed, internalError
 
     var errorDescription: String? {
         switch self {
@@ -24,7 +24,8 @@ enum CipherError: LocalizedError {
         case .noDigits:             return "Enter at least one number."
         case .emptyPassphrase:      return "Enter a passphrase."
         case .malformedCode:        return "That doesn't look like a Number Cipher code (check for typos or missing letters)."
-        case .unsupportedVersion:   return "This code was made by a newer version of Number Cipher."
+        case .badFirstLetter:       return "The first letter of a code is always A. Check the start of the code for a typo."
+        case .unsupportedVersion:   return "This code was made by a newer version of Number Cipher. Update this app to decrypt it."
         case .authenticationFailed: return "Wrong passphrase, or the code was altered."
         case .internalError:        return "Something went wrong inside the encryption engine."
         }
@@ -87,8 +88,14 @@ enum CipherEngine {
             guard bytes.count >= headerLength else { throw CipherError.malformedCode }
             rounds = bytes[1..<5].reduce(UInt32(0)) { $0 << 8 | UInt32($1) }
             guard rounds >= 100_000, rounds <= maxRounds else { throw CipherError.malformedCode }
-        default:
+        case 0:
+            throw CipherError.malformedCode
+        case 3...15:
+            // Future format versions all start with "A" (byte < 16).
             throw CipherError.unsupportedVersion
+        default:
+            // A first letter other than "A" can't be any version: it's a typo.
+            throw CipherError.badFirstLetter
         }
         guard bytes.count >= headerLength + 12 + 16 else { throw CipherError.malformedCode }
 
