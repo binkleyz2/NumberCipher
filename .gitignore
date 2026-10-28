@@ -7,3 +7,8 @@ __pycache__/
 bin/
 obj/
 out/
+.gradle/
+local.properties
+android/app/.cxx/
+*.jks
+*.keystore

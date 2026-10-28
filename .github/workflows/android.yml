@@ -1,0 +1,101 @@
+name: Android build check
+
+# Builds the Android app and tests it: native code against Python's hashlib, the code
+# format against recover.py (the Mac format), and the native library and the minified
+# release APK on an Android emulator.
+on:
+  push:
+    branches: [main]
+    paths: ['android/**', 'recover.py', '.github/workflows/android.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # to add the Gradle wrapper on first run
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Native PBKDF2 vs Python hashlib (portable and x86 SHA paths)
+        run: |
+          S=android/app/src/main/cpp; O=$RUNNER_TEMP/nt; mkdir -p $O
+          gcc -O2 -Wall -Wextra -Werror -c $S/sha256_portable.c -o $O/p.o
+          gcc -O2 -Wall -Wextra -Werror -msse4.1 -mssse3 -msha -c $S/sha256_shani.c -o $O/s.o
+          gcc -O2 -Wall -Wextra -Werror -c $S/pbkdf2_sha256.c -o $O/k.o
+          gcc -O2 -c android/nativetest/test_pbkdf2.c -o $O/t.o
+          gcc $O/*.o -o $O/test
+          $O/test portable > $O/portable.txt && python android/nativetest/check.py $O/portable.txt
+          if $O/test shani > $O/shani.txt; then python android/nativetest/check.py $O/shani.txt; else echo "Runner CPU has no SHA extensions; skipped"; fi
+
+      - name: Unit tests (code format and cross-platform compatibility)
+        run: gradle -p android :app:testDebugUnitTest --stacktrace
+
+      - name: recover.py (Mac format) decrypts a code made by the Android engine
+        run: |
+          pip install --quiet cryptography
+          got=$(python -c "import recover as r,sys; print(r.decrypt(open(sys.argv[1]).read(), 'maple orbit tundra swivel'))" android/app/build/interop/android_code.txt)
+          if [ "$got" = "6011 0009 9013 9424" ]; then echo "PASS android -> recover.py"; else echo "FAIL: '$got'"; exit 1; fi
+
+      - name: Build APKs
+        run: gradle -p android :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease --stacktrace
+
+      - name: Check 16 KB page alignment of native libraries
+        run: |
+          unzip -o -q android/app/build/outputs/apk/release/app-release.apk 'lib/*' -d $RUNNER_TEMP/apk
+          for so in $RUNNER_TEMP/apk/lib/*/libnumbercipher.so; do
+            align=$(readelf -lW "$so" | awk '/LOAD/ {print $NF; exit}')
+            echo "$so: LOAD align $align"
+            [ $((align)) -ge 16384 ] || { echo "not 16 KB aligned"; exit 1; }
+          done
+
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Emulator tests (native library) and release APK self-test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            gradle -p android :app:connectedDebugAndroidTest --stacktrace
+            adb logcat -d -s NumberCipher:I | tail -5
+            ./android/ci/release_selftest.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-test-build
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/reports/
+          retention-days: 7
+
+      - name: Add Gradle wrapper (first run only, for building in Android Studio)
+        if: github.event_name == 'push'
+        run: |
+          if [ ! -f android/gradlew ]; then
+            (cd android && gradle wrapper --gradle-version 8.11.1)
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add android/gradlew android/gradlew.bat android/gradle/wrapper
+            git commit -m "Add Gradle wrapper for the Android project"
+            git push || echo "Could not push the wrapper (main moved); it will be added on the next run."
+          fi
