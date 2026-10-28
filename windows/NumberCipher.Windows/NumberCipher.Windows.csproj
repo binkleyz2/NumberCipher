@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <RootNamespace>NumberCipher.Windows</RootNamespace>
+    <AssemblyName>NumberCipher</AssemblyName>
+    <Product>Number Cipher</Product>
+    <AssemblyTitle>Number Cipher</AssemblyTitle>
+    <Description>Encrypts number sequences into letter codes (AES-256-GCM, PBKDF2-SHA256).</Description>
+    <Version>0.0.0-dev</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NumberCipher.Core\NumberCipher.Core.csproj" />
+  </ItemGroup>
+
+</Project>

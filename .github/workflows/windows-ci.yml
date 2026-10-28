@@ -1,0 +1,54 @@
+name: Windows build check
+
+# Compiles the Windows app and runs the cross-platform compatibility tests
+# on a real Windows machine whenever the Windows code changes.
+on:
+  push:
+    branches: [main]
+    paths: ['windows/**', 'recover.py', '.github/workflows/windows-ci.yml']
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Engine self-tests
+        run: dotnet run --project windows/InteropTest -c Release
+
+      - name: Cross-check with recover.py (Mac app format)
+        env:
+          NC_PASS: maple orbit tundra swivel
+        run: |
+          pip install --quiet cryptography
+          T="dotnet windows/InteropTest/bin/Release/net8.0/InteropTest.dll"
+          py=$(python -c "import recover as r; print(r.encrypt('6011 0009 9013 9424', 'maple orbit tundra swivel', rounds=300000))")
+          [ "$($T decrypt "$py" | tr -d '\r')" = "6011 0009 9013 9424" ] && echo "PASS python -> windows"
+          cs=$($T encrypt 300000 "8675309" | tr -d '\r')
+          [ "$(python -c "import recover as r,sys; print(r.decrypt(sys.argv[1], 'maple orbit tundra swivel'))" "$cs" | tr -d '\r')" = "8675309" ] && echo "PASS windows -> python"
+
+      - name: Build app (x64 and ARM64)
+        run: |
+          for rid in win-x64 win-arm64; do
+            dotnet publish windows/NumberCipher.Windows -c Release -r $rid --self-contained \
+              -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+              -p:EnableCompressionInSingleFile=true -p:PublishReadyToRun=true \
+              -o out/$rid
+          done
+          ls -l out/*/NumberCipher.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NumberCipher-Windows-test-build
+          path: out/*/NumberCipher.exe
+          retention-days: 7
