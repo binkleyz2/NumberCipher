@@ -6,7 +6,8 @@ name: Release
 on:
   push:
     branches: [main]
-    paths: [VERSION]
+    # A changed release workflow also runs; the check job skips versions already released.
+    paths: [VERSION, .github/workflows/release.yml]
   workflow_dispatch:
 
 permissions:
@@ -113,10 +114,19 @@ jobs:
           else
             echo "::warning::Android signing secrets are not set; the APK is signed with a temporary key."
           fi
-          gradle -p android :app:assembleRelease
+          if ! gradle -p android :app:assembleRelease > "$RUNNER_TEMP/gradle.log" 2>&1; then
+            tail -60 "$RUNNER_TEMP/gradle.log"
+            echo "::error title=Android build::$(grep -E 'What went wrong|error:|Exception' -A4 "$RUNNER_TEMP/gradle.log" | head -30 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')"
+            exit 1
+          fi
           rm -f "$RUNNER_TEMP/release.jks"
           cp android/app/build/outputs/apk/release/app-release.apk NumberCipher-Android.apk
-          "$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)/apksigner" verify --print-certs NumberCipher-Android.apk | grep -E "Signer #1 certificate (DN|SHA-256)"
+          ls -l NumberCipher-Android.apk
+          APKSIGNER=$(ls -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
+          if [ -n "$APKSIGNER" ]; then
+            CERT=$("$APKSIGNER" verify --print-certs NumberCipher-Android.apk 2>&1 | grep -E "certificate (DN|SHA-256)" | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
+            echo "::notice title=APK signer::$CERT"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: android
