@@ -91,3 +91,11 @@ Keep a copy of it with your backups so your codes never depend on this one app.
 To publish a new release, change the number in `VERSION` and push to `main`. GitHub builds the Mac app on an Apple Silicon Mac, the Windows app on a Windows machine and the Android APK on Linux (after running the compatibility tests), then publishes them together.
 
 The Android APK is signed with the key in the `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` repository secrets. Android only installs an update over an existing app signed with the same key, so keep a backup of that keystore.
+
+## License
+
+Copyright (C) 2026 binkleyz2
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the [LICENSE](LICENSE) file for details.
