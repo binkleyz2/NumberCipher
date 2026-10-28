@@ -24,7 +24,7 @@ open "build/Number Cipher.app"
 | Layer | What it does |
 |---|---|
 | AES-256-GCM (CryptoKit) | Industry-standard encryption, run on the Apple Silicon AES hardware. Any altered letter is detected. |
-| PBKDF2-SHA256, 2,000,000 rounds | Each passphrase guess costs an attacker the same ~1 second it costs you. |
+| PBKDF2-SHA256, tuned to ~10 seconds | On first use the app measures your Mac and picks a round count (tens of millions on an M4) so deriving the key takes ~10 s. The count is stored in the code, so any Mac can decrypt it. Every passphrase guess costs an attacker that same work. |
 | Random 16-byte salt + nonce | Encrypting the same numbers twice gives completely different codes, so patterns leak nothing. |
 | Padding to 16-byte blocks | The code length doesn't reveal exactly how many digits you encrypted. |
 | Letters A–R without I and O | Unambiguous when written down or read aloud. |
@@ -39,6 +39,8 @@ open "build/Number Cipher.app"
 pip3 install cryptography
 python3 recover.py decrypt "ABPJB MHPDB ..."
 ```
+
+Codes made by version 1.0 (fixed 2,000,000 rounds) still decrypt in both the app and `recover.py`.
 
 Keep a copy of it with your backups so your codes never depend on this one app.
 

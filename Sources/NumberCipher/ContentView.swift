@@ -23,6 +23,8 @@ final class CipherModel {
     var errorText: String?
     var busy = false
     var copied = false
+    var startedAt: Date?
+    var estimate: Double = 0
 
     private var copyGeneration = 0
 
@@ -38,6 +40,11 @@ final class CipherModel {
         let m = mode, text = input, pw = passphrase
         busy = true; errorText = nil; output = ""; copied = false
         Task { @MainActor in
+            let secs = await Task.detached(priority: .userInitiated) { () -> Double in
+                m == .encrypt ? CipherEngine.targetSeconds : (CipherEngine.estimatedSeconds(forCode: text) ?? 0)
+            }.value
+            self.estimate = secs
+            self.startedAt = Date()
             let result = await Task.detached(priority: .userInitiated) { () -> Result<String, Error> in
                 Result {
                     m == .encrypt
@@ -46,6 +53,7 @@ final class CipherModel {
                 }
             }.value
             self.busy = false
+            self.startedAt = nil
             switch result {
             case .success(let s): self.output = s
             case .failure(let e): self.errorText = e.localizedDescription
@@ -132,6 +140,25 @@ struct ContentView: View {
                 Button("Clear All", action: model.clearAll)
             }
 
+            if model.busy {
+                if let start = model.startedAt, model.estimate > 0 {
+                    TimelineView(.periodic(from: start, by: 0.2)) { context in
+                        let elapsed = context.date.timeIntervalSince(start)
+                        let remaining = max(0, Int((model.estimate - elapsed).rounded(.up)))
+                        VStack(alignment: .leading, spacing: 4) {
+                            ProgressView(value: min(elapsed / model.estimate, 1))
+                            Text(remaining > 0
+                                 ? "Strengthening key — about \(remaining) s left"
+                                 : "Finishing…")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } else {
+                    Text("Measuring this Mac's speed…").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+
             if let errorText = model.errorText {
                 Label(errorText, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red)
@@ -158,7 +185,7 @@ struct ContentView: View {
 
             Spacer(minLength: 0)
 
-            Text("AES-256-GCM · PBKDF2-SHA256, 2,000,000 rounds · every encryption is unique")
+            Text("AES-256-GCM · PBKDF2-SHA256 tuned to ~10 s on this Mac · every encryption is unique")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
