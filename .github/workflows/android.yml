@@ -74,10 +74,7 @@ jobs:
           target: google_apis
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: |
-            gradle -p android :app:connectedDebugAndroidTest --stacktrace
-            adb logcat -d -s NumberCipher:I | tail -5
-            ./android/ci/release_selftest.sh
+          script: ./android/ci/emulator_tests.sh
 
       - uses: actions/upload-artifact@v4
         if: always()

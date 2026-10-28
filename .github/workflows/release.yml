@@ -85,8 +85,45 @@ jobs:
           name: windows
           path: NumberCipher-Windows-*.exe
 
+  android:
+    needs: check
+    if: needs.check.outputs.exists != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Unit tests
+        run: gradle -p android :app:testDebugUnitTest
+      - name: Build signed APK
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          NC_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          NC_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          NC_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            export NC_KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
+          else
+            echo "::warning::Android signing secrets are not set; the APK is signed with a temporary key."
+          fi
+          gradle -p android :app:assembleRelease
+          rm -f "$RUNNER_TEMP/release.jks"
+          cp android/app/build/outputs/apk/release/app-release.apk NumberCipher-Android.apk
+          "$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)/apksigner" verify --print-certs NumberCipher-Android.apk | grep -E "Signer #1 certificate (DN|SHA-256)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: NumberCipher-Android.apk
+
   publish:
-    needs: [check, mac, windows]
+    needs: [check, mac, windows, android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -109,17 +146,20 @@ jobs:
           | `NumberCipher-Windows-arm64.exe` | Windows on ARM (Snapdragon, Surface Pro X, etc.) |
           | `NumberCipher-Windows-x64-small.exe` | Small edition for Intel/AMD PCs that have the [.NET Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) 10 or newer installed |
           | `NumberCipher-Windows-arm64-small.exe` | Small edition for Windows on ARM, same requirement |
+          | `NumberCipher-Android.apk` | Android 8.0+ phones, tablets, foldables and Chromebooks |
           | `recover.py` | Decrypts codes on any computer with Python (`pip3 install cryptography`) |
 
-          Codes are interchangeable: anything encrypted on the Mac decrypts on Windows and vice versa.
+          Codes are interchangeable: anything encrypted on one platform decrypts on the others.
 
           **Full or small Windows edition?** Both are the same app. The full edition includes everything
           it needs. The small edition is a fraction of the size but needs Microsoft's free .NET Desktop
           Runtime; if it's missing, Windows shows a message with a download link the first time you open it.
 
-          **First launch.** Neither app is signed by Apple or Microsoft yet.
+          **First launch.** None of the apps come from an app store yet.
           - Mac: right-click **Number Cipher.app** → **Open**, then confirm.
           - Windows: if SmartScreen appears, click **More info** → **Run anyway**.
+          - Android: open the APK on the phone and allow your browser or file manager to
+            **install unknown apps** when asked. Play Protect may ask you to confirm; choose **Install anyway**.
 
           `SHA256SUMS.txt` lets you confirm a download wasn't altered.
           EOF
