@@ -1,0 +1,46 @@
+name: Release
+
+# Builds Number Cipher.app on an Apple Silicon runner and publishes it as a
+# GitHub Release whenever a version tag (e.g. v1.0.0) is pushed.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest   # Apple Silicon (arm64) runner
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build app
+        run: |
+          chmod +x build.sh
+          ./build.sh
+
+      - name: Package
+        run: |
+          ditto -c -k --keepParent "build/Number Cipher.app" NumberCipher-macOS-arm64.zip
+          shasum -a 256 NumberCipher-macOS-arm64.zip > NumberCipher-macOS-arm64.zip.sha256
+          cat NumberCipher-macOS-arm64.zip.sha256
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'EOF'
+          **Download:** `NumberCipher-macOS-arm64.zip` (Apple Silicon, macOS 14+)
+
+          The app is self-signed, not notarized by Apple. The first time you open it,
+          right-click **Number Cipher.app** and choose **Open**, then confirm.
+
+          `recover.py` decrypts codes without the app (`pip3 install cryptography`).
+          EOF
+          gh release create "$GITHUB_REF_NAME" \
+            NumberCipher-macOS-arm64.zip \
+            NumberCipher-macOS-arm64.zip.sha256 \
+            recover.py \
+            --title "Number Cipher $GITHUB_REF_NAME" \
+            --notes-file notes.md
