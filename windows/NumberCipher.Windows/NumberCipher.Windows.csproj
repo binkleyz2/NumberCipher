@@ -14,6 +14,9 @@
     <AssemblyTitle>Number Cipher</AssemblyTitle>
     <Description>Encrypts number sequences into letter codes (AES-256-GCM, PBKDF2-SHA256).</Description>
     <Version>0.0.0-dev</Version>
+    <!-- The small edition uses the PC's installed .NET Desktop Runtime. Allow it to run on
+         .NET 8 or any newer major version (e.g. .NET 10), whichever is installed. -->
+    <RollForward>Major</RollForward>
   </PropertyGroup>
 
   <ItemGroup>

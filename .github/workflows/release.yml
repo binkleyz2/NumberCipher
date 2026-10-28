@@ -62,15 +62,22 @@ jobs:
           dotnet-version: '8.0.x'
       - name: Compatibility self-tests
         run: dotnet run --project windows/InteropTest -c Release
-      - name: Build x64 and ARM64
+      - name: Build x64 and ARM64 (full and small editions)
         run: |
           for arch in x64 arm64; do
+            # Full: bundles the .NET runtime, runs on any PC with nothing installed.
             dotnet publish windows/NumberCipher.Windows -c Release -r win-$arch --self-contained \
               -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
               -p:EnableCompressionInSingleFile=true -p:PublishReadyToRun=true \
               -p:Version=${{ needs.check.outputs.version }} \
               -o out/$arch
             cp out/$arch/NumberCipher.exe NumberCipher-Windows-$arch.exe
+            # Small: uses the PC's installed .NET Desktop Runtime (8 or newer).
+            dotnet publish windows/NumberCipher.Windows -c Release -r win-$arch --self-contained false \
+              -p:PublishSingleFile=true \
+              -p:Version=${{ needs.check.outputs.version }} \
+              -o out/$arch-small
+            cp out/$arch-small/NumberCipher.exe NumberCipher-Windows-$arch-small.exe
           done
           ls -l NumberCipher-Windows-*.exe
       - uses: actions/upload-artifact@v4
@@ -100,9 +107,15 @@ jobs:
           | `NumberCipher-macOS-arm64.zip` | Mac with Apple Silicon (M1–M4 and newer), macOS 14+ |
           | `NumberCipher-Windows-x64.exe` | Most Windows 10/11 PCs (Intel or AMD) |
           | `NumberCipher-Windows-arm64.exe` | Windows on ARM (Snapdragon, Surface Pro X, etc.) |
+          | `NumberCipher-Windows-x64-small.exe` | Small edition for Intel/AMD PCs that have the [.NET Desktop Runtime](https://dotnet.microsoft.com/download/dotnet) 8 or newer installed |
+          | `NumberCipher-Windows-arm64-small.exe` | Small edition for Windows on ARM, same requirement |
           | `recover.py` | Decrypts codes on any computer with Python (`pip3 install cryptography`) |
 
           Codes are interchangeable: anything encrypted on the Mac decrypts on Windows and vice versa.
+
+          **Full or small Windows edition?** Both are the same app. The full edition includes everything
+          it needs. The small edition is a fraction of the size but needs Microsoft's free .NET Desktop
+          Runtime; if it's missing, Windows shows a message with a download link the first time you open it.
 
           **First launch.** Neither app is signed by Apple or Microsoft yet.
           - Mac: right-click **Number Cipher.app** → **Open**, then confirm.
