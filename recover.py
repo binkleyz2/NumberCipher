@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent decoder/encoder for Number Cipher codes.
+"""Independent decoder/encoder for Cipherwords codes.
 
 Lets you recover your text on any computer even without the apps.
 Requires:  pip3 install cryptography
@@ -31,7 +31,7 @@ MAX_TEXT_BYTES = 20_000
 ALPHA = "ABCDEFGHJKLMNPQR"
 WORDS_PER_LINE = 6
 
-MSG_MALFORMED = "That doesn't look like a Number Cipher code (check for typos or missing letters)."
+MSG_MALFORMED = "That doesn't look like a Cipherwords code (check for typos or missing letters)."
 MSG_WORD_COUNT = "A word seems to be missing or extra. Check the code against the original."
 
 
@@ -145,7 +145,7 @@ def read_header(b: bytes, words: bool) -> tuple[int, int]:
     if b[0] == 0:
         raise ValueError(MSG_MALFORMED)
     if b[0] < 16:  # future versions all start with "A" (letters) / ACOUSTIC.. range (words)
-        raise ValueError("This code was made by a newer version of Number Cipher. Update this app to decrypt it.")
+        raise ValueError("This code was made by a newer version of Cipherwords. Update this app to decrypt it.")
     if words:
         raise ValueError("The first word of the code looks wrong. Check it for a typo.")
     raise ValueError("The first letter of a code is always A. Check the start of the code for a typo.")

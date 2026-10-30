@@ -3,7 +3,7 @@ import CryptoKit
 import CommonCrypto
 import Security
 
-/// Number Cipher code format
+/// Cipherwords code format
 ///
 /// Version 2 (written by this app):
 ///   bytes  = version(1)=2 | rounds(4, big-endian) | salt(16) | nonce(12) | ciphertext(n) | tag(16)
@@ -35,9 +35,9 @@ enum CipherError: LocalizedError, Equatable {
         case .badFirstWord:         return "The first word of the code looks wrong. Check it for a typo."
         case .badLastWord:          return "The last word of the code looks wrong. Check it for a typo."
         case .emptyPassphrase:      return "Enter a passphrase."
-        case .malformedCode:        return "That doesn't look like a Number Cipher code (check for typos or missing letters)."
+        case .malformedCode:        return "That doesn't look like a Cipherwords code (check for typos or missing letters)."
         case .badFirstLetter:       return "The first letter of a code is always A. Check the start of the code for a typo."
-        case .unsupportedVersion:   return "This code was made by a newer version of Number Cipher. Update this app to decrypt it."
+        case .unsupportedVersion:   return "This code was made by a newer version of Cipherwords. Update this app to decrypt it."
         case .authenticationFailed: return "Wrong passphrase, or the code was altered."
         case .internalError:        return "Something went wrong inside the encryption engine."
         }

@@ -1,6 +1,6 @@
-# Number Cipher
+# Cipherwords
 
-Native apps for **Mac** (Apple Silicon, macOS 14+), **Windows** (10/11, x64 and ARM64) and **Android** (8.0+ phones, tablets, foldables and Chromebooks) that turn any text (numbers, notes, passwords, addresses, any language or emoji) into a code made of ordinary English words, and back. All three use the same code format and strength, so a code made on one decrypts on the others.
+Native apps for **Mac** (Apple Silicon, macOS 14+), **Windows** (10/11, x64 and ARM64) and **Android** (8.0+ phones, tablets, foldables and Chromebooks) that turn any text (numbers, notes, passwords, addresses, any language or emoji) into a code made of ordinary English words, and back. All three use the same code format and strength, so a code made on one decrypts on the others. (Cipherwords was called Number Cipher before version 1.5; its codes still decrypt.)
 
 ```
 ACOUSTIC ABILITY CEILING SCATTER SUBJECT PITCH
@@ -18,7 +18,7 @@ Requires Xcode or the Xcode Command Line Tools (`xcode-select --install`).
 cd NumberCipher
 chmod +x build.sh
 ./build.sh
-open "build/Number Cipher.app"
+open "build/Cipherwords.app"
 ```
 
 ## Build — Windows
@@ -27,7 +27,7 @@ Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). F
 
 ```powershell
 dotnet publish windows/NumberCipher.Windows -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o out
-out\NumberCipher.exe
+out\Cipherwords.exe
 ```
 
 Use `-r win-arm64` for Windows on ARM. `dotnet run --project windows/InteropTest` runs the compatibility tests.
@@ -37,6 +37,8 @@ Use `-r win-arm64` for Windows on ARM. `dotnet run --project windows/InteropTest
 | `windows/NumberCipher.Core` | The cipher engine (same format as the Mac app) |
 | `windows/NumberCipher.Windows` | The Windows app window |
 | `windows/InteropTest` | Tests that codes cross between Windows, Mac and `recover.py` |
+
+The folders, project files and Android package still use the original internal name, `NumberCipher`. Changing the Android package name would make Android treat the app as a different one, so it couldn't update the installed app.
 
 Mac and `recover.py` tests are in `Tests/`. The **Checks** workflow runs every platform's tests on each pull request.
 

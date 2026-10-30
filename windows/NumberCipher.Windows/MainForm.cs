@@ -60,7 +60,7 @@ internal sealed class MainForm : Form
     {
         string version = Assembly.GetExecutingAssembly()
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "";
-        Text = $"Number Cipher {version}".Trim();
+        Text = $"Cipherwords {version}".Trim();
         Font = SystemFonts.MessageBoxFont ?? Font;
         AutoScaleMode = AutoScaleMode.Dpi;
         ClientSize = new Size(600, 660);

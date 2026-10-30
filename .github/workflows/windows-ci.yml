@@ -47,10 +47,10 @@ jobs:
               -p:EnableCompressionInSingleFile=true -p:PublishReadyToRun=true \
               -o out/$rid
           done
-          ls -l out/*/NumberCipher.exe
+          ls -l out/*/Cipherwords.exe
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NumberCipher-Windows-test-build
-          path: out/*/NumberCipher.exe
+          name: Cipherwords-Windows-test-build
+          path: out/*/Cipherwords.exe
           retention-days: 7

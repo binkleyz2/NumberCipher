@@ -20,7 +20,7 @@ class CancelledException : Exception("Cancelled")
 data class WorkProgress(val fraction: Float, val secondsLeft: Int?, val rounds: Int)
 
 /**
- * Number Cipher code format — identical to the Mac and Windows apps.
+ * Cipherwords code format — identical to the Mac and Windows apps.
  *
  * Version 2 (written here):
  *   bytes  = version(1)=2 | rounds(4, big-endian) | salt(16) | nonce(12) | ciphertext(n) | tag(16)
@@ -73,9 +73,9 @@ class CipherEngine(
         fun msgUnknownWord(word: String, position: Int) =
             "\u201C$word\u201D (word $position) isn't one of the code words. Check its spelling."
         const val MSG_NO_PASSPHRASE = "Enter a passphrase."
-        const val MSG_MALFORMED = "That doesn't look like a Number Cipher code (check for typos or missing letters)."
+        const val MSG_MALFORMED = "That doesn't look like a Cipherwords code (check for typos or missing letters)."
         const val MSG_FIRST_LETTER = "The first letter of a code is always A. Check the start of the code for a typo."
-        const val MSG_NEWER = "This code was made by a newer version of Number Cipher. Update this app to decrypt it."
+        const val MSG_NEWER = "This code was made by a newer version of Cipherwords. Update this app to decrypt it."
         const val MSG_WRONG = "Wrong passphrase, or the code was altered."
 
         private val random = SecureRandom()

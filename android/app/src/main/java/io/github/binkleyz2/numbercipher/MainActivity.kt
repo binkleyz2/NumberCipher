@@ -144,7 +144,7 @@ fun CipherScreen(vm: CipherViewModel = viewModel()) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Number Cipher") },
+                title = { Text("Cipherwords") },
                 actions = {
                     IconButton(onClick = { showInfo = true }) {
                         Icon(Icons.Outlined.Info, contentDescription = "Device speed and about")

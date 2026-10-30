@@ -9,7 +9,7 @@ namespace NumberCipher.Core;
 public sealed class CipherException(string message) : Exception(message);
 
 /// <summary>
-/// Number Cipher code format — identical to the Mac app, so codes move freely between them.
+/// Cipherwords code format — identical to the Mac app, so codes move freely between them.
 ///
 /// Version 2 (written here):
 ///   bytes  = version(1)=2 | rounds(4, big-endian) | salt(16) | nonce(12) | ciphertext(n) | tag(16)
@@ -183,7 +183,7 @@ public static class CipherEngine
                 throw Malformed();
             case < 16:
                 // Future format versions all start with "A" (byte < 16).
-                throw new CipherException("This code was made by a newer version of Number Cipher. Update this app to decrypt it.");
+                throw new CipherException("This code was made by a newer version of Cipherwords. Update this app to decrypt it.");
             default:
                 // A first letter other than "A" (or a first word outside ACOUSTIC..ADDRESS) can't be any version: it's a typo.
                 throw new CipherException(words
@@ -193,7 +193,7 @@ public static class CipherEngine
     }
 
     private static CipherException Malformed() =>
-        new("That doesn't look like a Number Cipher code (check for typos or missing letters).");
+        new("That doesn't look like a Cipherwords code (check for typos or missing letters).");
 
     private static byte[] DeriveKey(string passphrase, byte[] salt, int rounds)
     {
