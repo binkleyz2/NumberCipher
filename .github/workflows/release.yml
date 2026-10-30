@@ -40,6 +40,10 @@ jobs:
     runs-on: macos-latest   # Apple Silicon (arm64)
     steps:
       - uses: actions/checkout@v4
+      - name: Compatibility self-tests
+        run: |
+          swiftc -O Sources/NumberCipher/CipherEngine.swift Sources/NumberCipher/WordList.swift Tests/MacSelfTest/main.swift -o "$RUNNER_TEMP/selftest"
+          "$RUNNER_TEMP/selftest"
       - run: |
           chmod +x build.sh
           ./build.sh
@@ -160,6 +164,8 @@ jobs:
           | `recover.py` | Decrypts codes on any computer with Python (`pip3 install cryptography`) |
 
           Codes are interchangeable: anything encrypted on one platform decrypts on the others.
+          Since 1.5 the apps encrypt any text and write codes as English words; letter codes made by
+          earlier versions still decrypt.
 
           **Full or small Windows edition?** Both are the same app. The full edition includes everything
           it needs. The small edition is a fraction of the size but needs Microsoft's free .NET Desktop

@@ -1,0 +1,71 @@
+name: Checks
+
+# Runs the compatibility tests for recover.py, the Mac app and the Windows app on every pull
+# request (the Android checks are in android.yml), and checks that codes made by each app
+# decrypt with recover.py. Nothing is published.
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --quiet cryptography
+      - name: recover.py tests
+        run: python Tests/recover_test.py
+
+  mac:
+    runs-on: macos-latest   # Apple Silicon (arm64)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compatibility self-tests
+        run: |
+          swiftc -O Sources/NumberCipher/CipherEngine.swift Sources/NumberCipher/WordList.swift Tests/MacSelfTest/main.swift -o "$RUNNER_TEMP/selftest"
+          "$RUNNER_TEMP/selftest"
+      - name: recover.py decrypts a code made by the Mac engine
+        env:
+          NC_PASS: maple orbit tundra swivel
+        run: |
+          pip install --quiet cryptography
+          "$RUNNER_TEMP/selftest" encrypt "Mac → recover.py é 4111" > "$RUNNER_TEMP/mac_code.txt"
+          cat "$RUNNER_TEMP/mac_code.txt"
+          got=$(PYTHONIOENCODING=utf-8 python -c "import recover as r,sys,os; print(r.decrypt(open(sys.argv[1]).read(), os.environ['NC_PASS']))" "$RUNNER_TEMP/mac_code.txt")
+          if [ "$got" = "Mac → recover.py é 4111" ]; then echo "PASS mac -> recover.py"; else echo "FAIL: '$got'"; exit 1; fi
+      - name: Build the app
+        run: swift build -c release --arch arm64
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compatibility self-tests
+        run: dotnet run --project windows/InteropTest -c Release
+      - name: recover.py decrypts a code made by the Windows engine
+        env:
+          NC_PASS: maple orbit tundra swivel
+          PYTHONIOENCODING: utf-8
+        run: |
+          pip install --quiet cryptography
+          dotnet run --project windows/InteropTest -c Release -- encrypt 300000 "Windows to recover.py 4111" > "$RUNNER_TEMP/win_code.txt"
+          cat "$RUNNER_TEMP/win_code.txt"
+          got=$(python -c "import recover as r,sys,os; print(r.decrypt(open(sys.argv[1]).read(), os.environ['NC_PASS']))" "$RUNNER_TEMP/win_code.txt" | tr -d '\r')
+          if [ "$got" = "Windows to recover.py 4111" ]; then echo "PASS windows -> recover.py"; else echo "FAIL: '$got'"; exit 1; fi
+      - name: Build the app
+        run: dotnet build windows/NumberCipher.Windows -c Release

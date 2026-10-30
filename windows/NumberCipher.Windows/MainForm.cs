@@ -10,17 +10,18 @@ namespace NumberCipher.Windows;
 internal sealed class MainForm : Form
 {
     private static readonly Font Mono = new("Consolas", 11f);
+    private static readonly Font Body = new(SystemFonts.MessageBoxFont?.FontFamily ?? FontFamily.GenericSansSerif, 11f);
     private static readonly Color ErrorColor = Color.FromArgb(196, 43, 28);
     private static readonly Color GoodColor = Color.FromArgb(16, 124, 16);
     private static readonly Color FairColor = Color.FromArgb(202, 80, 16);
 
     private readonly RadioButton encryptMode = new() { Text = "Encrypt", Checked = true, AutoSize = true };
     private readonly RadioButton decryptMode = new() { Text = "Decrypt", AutoSize = true };
-    private readonly Label inputLabel = Heading("Numbers to encrypt");
+    private readonly Label inputLabel = Heading("Text to encrypt");
     private readonly TextBox input = new()
     {
         Multiline = true, AcceptsReturn = true, ScrollBars = ScrollBars.Vertical,
-        Font = Mono, Dock = DockStyle.Fill, MinimumSize = new Size(0, 90),
+        Font = Body, Dock = DockStyle.Fill, MinimumSize = new Size(0, 90),
     };
     private readonly TextBox passphrase = new() { UseSystemPasswordChar = true, PlaceholderText = "Passphrase", Dock = DockStyle.Fill };
     private readonly TextBox confirm = new() { UseSystemPasswordChar = true, PlaceholderText = "Confirm passphrase", Dock = DockStyle.Fill };
@@ -38,7 +39,7 @@ internal sealed class MainForm : Form
 
     private readonly Label errorLabel = new() { AutoSize = true, ForeColor = ErrorColor, Visible = false, MaximumSize = new Size(560, 0) };
 
-    private readonly Label outputLabel = Heading("Letter code");
+    private readonly Label outputLabel = Heading("Word code");
     private readonly Button copyButton = new() { Text = "Copy", AutoSize = true, MinimumSize = new Size(90, 30), Anchor = AnchorStyles.Right };
     private readonly TextBox output = new()
     {
@@ -122,7 +123,7 @@ internal sealed class MainForm : Form
         progressTimer.Tick += (_, _) => UpdateProgress();
         clipboardTimer.Tick += (_, _) => ClearClipboardIfUnchanged();
 
-        AcceptButton = null; // Enter makes new lines in the numbers box; Ctrl+Enter runs.
+        AcceptButton = null; // Enter makes new lines in the text box; Ctrl+Enter runs.
         UpdateState();
     }
 
@@ -153,8 +154,10 @@ internal sealed class MainForm : Form
     private void ModeChanged()
     {
         ClearAll();
-        inputLabel.Text = IsEncrypt ? "Numbers to encrypt" : "Letter code to decrypt";
-        outputLabel.Text = IsEncrypt ? "Letter code" : "Numbers";
+        inputLabel.Text = IsEncrypt ? "Text to encrypt" : "Code to decrypt (words, or an older letter code)";
+        outputLabel.Text = IsEncrypt ? "Word code" : "Text";
+        input.Font = IsEncrypt ? Body : Mono;
+        output.Font = IsEncrypt ? Mono : Body;
         runButton.Text = IsEncrypt ? "Encrypt" : "Decrypt";
         confirm.Visible = strengthRow.Visible = IsEncrypt;
         UpdateState();
@@ -210,7 +213,7 @@ internal sealed class MainForm : Form
             progressTimer.Start();
 
             string result = await Task.Run(() => encrypt ? CipherEngine.Encrypt(text, pw) : CipherEngine.Decrypt(text, pw));
-            output.Text = encrypt ? result : result.Replace("\n", "\r\n");
+            output.Text = result.Replace("\n", "\r\n");
             outputPanel.Visible = true;
         }
         catch (CipherException e)
