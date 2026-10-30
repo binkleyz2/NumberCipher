@@ -9,7 +9,7 @@ namespace NumberCipher.Core;
 public sealed class CipherException(string message) : Exception(message);
 
 /// <summary>
-/// Number Cipher code format — identical to the Mac app, so codes move freely between them.
+/// Cipherwords code format — identical to the Mac app, so codes move freely between them.
 ///
 /// Version 2 (written here):
 ///   bytes  = version(1)=2 | rounds(4, big-endian) | salt(16) | nonce(12) | ciphertext(n) | tag(16)
@@ -19,8 +19,14 @@ public sealed class CipherException(string message) : Exception(message);
 ///
 /// Version 1 (still decrypted): version(1)=1 | salt(16) | nonce | ct | tag, fixed 2,000,000 rounds.
 ///
-/// Both: plaintext padded with 0x00 to a multiple of 16 bytes; each byte -> two letters
-/// from "ABCDEFGHJKLMNPQR" (no I or O).
+/// Both: plaintext is UTF-8 text padded with 0x00 to the next multiple of 16 bytes.
+///
+/// Written as words (1.5+): the bytes are read as a bit string, most significant bit first, split
+/// into 11-bit numbers (the last padded with 0 bits), each picking a word from the BIP39 English list
+/// (WordList.cs). Every v2 code is 49 + 16k bytes, so the byte count is the largest
+/// n &lt;= 11*words/8 with n % 16 == 1, and ceil(8n/11) must equal the word count.
+/// Written as letters (1.0–1.4, still read): each byte -> two letters from "ABCDEFGHJKLMNPQR".
+/// A code containing any letter outside that set is read as words.
 ///
 /// PBKDF2 and AES-GCM run through Windows CNG, which uses the CPU's AES and SHA instructions.
 /// </summary>
@@ -37,7 +43,13 @@ public static class CipherEngine
     public const int TagLength = 16;
     public const int PadBlock = 16;
     public const string Alphabet = "ABCDEFGHJKLMNPQR";
-    private const string Allowed = "0123456789 ,.-\n\t";
+    public const int MaxTextBytes = 20_000;
+    public const int WordsPerLine = 6;
+
+    private static readonly Dictionary<string, int> wordIndex =
+        WordList.Words.Select((w, i) => (w, i)).ToDictionary(p => p.w, p => p.i);
+    private static readonly Dictionary<string, int> prefixIndex =
+        WordList.Words.Select((w, i) => (w, i)).ToDictionary(p => p.w[..Math.Min(4, p.w.Length)], p => p.i);
 
     private static readonly Lazy<int> calibrated = new(Calibrate, LazyThreadSafetyMode.ExecutionAndPublication);
 
@@ -47,21 +59,23 @@ public static class CipherEngine
     // ---- Public API -------------------------------------------------------------------------
 
     /// <param name="rounds">Override the calibrated round count (used by tests).</param>
-    public static string Encrypt(string numbers, string passphrase, int? rounds = null)
+    public static string Encrypt(string text, string passphrase, int? rounds = null)
     {
-        string cleaned = numbers.Replace("\r\n", "\n").Replace('\r', '\n').Trim();
-        if (cleaned.Any(c => !Allowed.Contains(c)))
-            throw new CipherException("Only digits, spaces, commas, periods, dashes and line breaks are allowed.");
-        if (!cleaned.Any(char.IsAsciiDigit))
-            throw new CipherException("Enter at least one number.");
+        string cleaned = text.Replace("\r\n", "\n").Replace('\r', '\n').Trim();
+        if (cleaned.Length == 0)
+            throw new CipherException("Enter some text to encrypt.");
+        if (cleaned.Contains('\0'))
+            throw new CipherException("The text contains a null character, which can't be encrypted.");
+        if (Encoding.UTF8.GetByteCount(cleaned) > MaxTextBytes)
+            throw new CipherException("That's too much text (the limit is 20,000 bytes, about 20,000 English characters).");
         if (passphrase.Length == 0)
             throw new CipherException("Enter a passphrase.");
 
         int r = rounds ?? CalibratedRounds;
-        byte[] text = Encoding.UTF8.GetBytes(cleaned);
-        byte[] plain = new byte[(text.Length / PadBlock + 1) * PadBlock];
-        text.CopyTo(plain, 0);
-        CryptographicOperations.ZeroMemory(text);
+        byte[] utf8 = new UTF8Encoding(false, throwOnInvalidBytes: true).GetBytes(cleaned);
+        byte[] plain = new byte[(utf8.Length / PadBlock + 1) * PadBlock];
+        utf8.CopyTo(plain, 0);
+        CryptographicOperations.ZeroMemory(utf8);
 
         byte[] salt = RandomNumberGenerator.GetBytes(SaltLength);
         byte[] header = new byte[1 + 4 + SaltLength];
@@ -87,15 +101,16 @@ public static class CipherEngine
         }
         header.CopyTo(output, 0);
         nonce.CopyTo(output, header.Length);
-        return Group(ToLetters(output));
+        return ToWords(output);
     }
 
     public static string Decrypt(string code, string passphrase)
     {
         if (passphrase.Length == 0)
             throw new CipherException("Enter a passphrase.");
-        byte[] bytes = FromLetters(code);
-        (int headerLength, int rounds) = ReadHeader(bytes);
+        bool words = IsWordCode(code);
+        byte[] bytes = words ? FromWords(code) : FromLetters(code);
+        (int headerLength, int rounds) = ReadHeader(bytes, words);
         if (bytes.Length < headerLength + NonceLength + TagLength) throw Malformed();
 
         ReadOnlySpan<byte> all = bytes;
@@ -131,7 +146,8 @@ public static class CipherEngine
     {
         try
         {
-            (_, int rounds) = ReadHeader(FromLetters(code));
+            bool words = IsWordCode(code);
+            (_, int rounds) = ReadHeader(words ? FromWords(code) : FromLetters(code), words);
             return (double)rounds / CalibratedRounds * TargetSeconds;
         }
         catch (CipherException) { return null; }
@@ -151,7 +167,7 @@ public static class CipherEngine
 
     // ---- Format helpers ---------------------------------------------------------------------
 
-    private static (int headerLength, int rounds) ReadHeader(byte[] bytes)
+    private static (int headerLength, int rounds) ReadHeader(byte[] bytes, bool words)
     {
         if (bytes.Length == 0) throw Malformed();
         switch (bytes[0])
@@ -167,15 +183,17 @@ public static class CipherEngine
                 throw Malformed();
             case < 16:
                 // Future format versions all start with "A" (byte < 16).
-                throw new CipherException("This code was made by a newer version of Number Cipher. Update this app to decrypt it.");
+                throw new CipherException("This code was made by a newer version of Cipherwords. Update this app to decrypt it.");
             default:
-                // A first letter other than "A" can't be any version: it's a typo.
-                throw new CipherException("The first letter of a code is always A. Check the start of the code for a typo.");
+                // A first letter other than "A" (or a first word outside ACOUSTIC..ADDRESS) can't be any version: it's a typo.
+                throw new CipherException(words
+                    ? "The first word of the code looks wrong. Check it for a typo."
+                    : "The first letter of a code is always A. Check the start of the code for a typo.");
         }
     }
 
     private static CipherException Malformed() =>
-        new("That doesn't look like a Number Cipher code (check for typos or missing letters).");
+        new("That doesn't look like a Cipherwords code (check for typos or missing letters).");
 
     private static byte[] DeriveKey(string passphrase, byte[] salt, int rounds)
     {
@@ -206,6 +224,68 @@ public static class CipherEngine
         double rounded = Math.Round(estimate / 100_000) * 100_000;
         return (int)Math.Clamp(rounded, MinRounds, MaxRounds / 2);
     }
+
+    // ---- Words ------------------------------------------------------------------------------
+
+    /// <summary>True if <paramref name="code"/> has any letter outside the old letter-code alphabet, so it must be words.</summary>
+    public static bool IsWordCode(string code) =>
+        code.Any(c => char.IsAsciiLetter(c) && !Alphabet.Contains(char.ToUpperInvariant(c)));
+
+    public static string ToWords(ReadOnlySpan<byte> data)
+    {
+        var words = new List<string>((data.Length * 8 + 10) / 11);
+        uint acc = 0; int bits = 0;
+        foreach (byte b in data)
+        {
+            acc = acc << 8 | b; bits += 8;
+            if (bits >= 11) { bits -= 11; words.Add(WordList.Words[(int)(acc >> bits & 0x7FF)]); }
+            acc &= (1u << bits) - 1;
+        }
+        if (bits > 0) words.Add(WordList.Words[(int)(acc << (11 - bits) & 0x7FF)]);
+        return string.Join("\n", words.Chunk(WordsPerLine).Select(line => string.Join(' ', line).ToUpperInvariant()));
+    }
+
+    public static byte[] FromWords(string code)
+    {
+        // Words are runs of ASCII letters; anything else (spaces, line breaks, numbering, punctuation) separates them.
+        var indices = new List<int>();
+        var sb = new StringBuilder();
+        void Flush()
+        {
+            if (sb.Length == 0) return;
+            string w = sb.ToString().ToLowerInvariant();
+            sb.Clear();
+            if (wordIndex.TryGetValue(w, out int v) || (w.Length >= 4 && prefixIndex.TryGetValue(w[..4], out v)))
+                indices.Add(v);
+            else
+                throw new CipherException($"\u201C{w.ToUpperInvariant()}\u201D (word {indices.Count + 1}) isn't one of the code words. Check its spelling.");
+        }
+        foreach (char c in code)
+        {
+            if (char.IsAsciiLetter(c)) sb.Append(c); else Flush();
+        }
+        Flush();
+
+        int count = indices.Count;
+        int n = count * 11 / 8;
+        n -= (n - 1) % 16;
+        if (n < 49 + PadBlock || (n * 8 + 10) / 11 != count)
+            throw new CipherException("A word seems to be missing or extra. Check the code against the original.");
+
+        byte[] output = new byte[n];
+        int o = 0;
+        uint acc = 0; int bits = 0;
+        foreach (int v in indices)
+        {
+            acc = acc << 11 | (uint)v; bits += 11;
+            while (bits >= 8 && o < n) { bits -= 8; output[o++] = (byte)(acc >> bits); }
+            acc &= (1u << bits) - 1;
+        }
+        if (acc != 0) throw new CipherException("The last word of the code looks wrong. Check it for a typo.");
+        return output;
+    }
+
+    // ---- Letters (codes made by versions 1.0–1.4) ---------------------------------------------
 
     public static string ToLetters(ReadOnlySpan<byte> data)
     {

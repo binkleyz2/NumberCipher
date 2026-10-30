@@ -40,14 +40,18 @@ jobs:
     runs-on: macos-latest   # Apple Silicon (arm64)
     steps:
       - uses: actions/checkout@v4
+      - name: Compatibility self-tests
+        run: |
+          swiftc -O Sources/NumberCipher/CipherEngine.swift Sources/NumberCipher/WordList.swift Tests/MacSelfTest/main.swift -o "$RUNNER_TEMP/selftest"
+          "$RUNNER_TEMP/selftest"
       - run: |
           chmod +x build.sh
           ./build.sh
-          ditto -c -k --keepParent "build/Number Cipher.app" NumberCipher-macOS-arm64.zip
+          ditto -c -k --keepParent "build/Cipherwords.app" Cipherwords-macOS-arm64.zip
       - uses: actions/upload-artifact@v4
         with:
           name: mac
-          path: NumberCipher-macOS-arm64.zip
+          path: Cipherwords-macOS-arm64.zip
 
   windows:
     needs: check
@@ -72,19 +76,19 @@ jobs:
               -p:EnableCompressionInSingleFile=true -p:PublishReadyToRun=true \
               -p:Version=${{ needs.check.outputs.version }} \
               -o out/$arch
-            cp out/$arch/NumberCipher.exe NumberCipher-Windows-$arch.exe
+            cp out/$arch/Cipherwords.exe Cipherwords-Windows-$arch.exe
             # Small: uses the PC's installed .NET Desktop Runtime (10 or newer).
             dotnet publish windows/NumberCipher.Windows -c Release -r win-$arch --self-contained false \
               -p:PublishSingleFile=true \
               -p:Version=${{ needs.check.outputs.version }} \
               -o out/$arch-small
-            cp out/$arch-small/NumberCipher.exe NumberCipher-Windows-$arch-small.exe
+            cp out/$arch-small/Cipherwords.exe Cipherwords-Windows-$arch-small.exe
           done
-          ls -l NumberCipher-Windows-*.exe
+          ls -l Cipherwords-Windows-*.exe
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: NumberCipher-Windows-*.exe
+          path: Cipherwords-Windows-*.exe
 
   android:
     needs: check
@@ -120,17 +124,17 @@ jobs:
             exit 1
           fi
           rm -f "$RUNNER_TEMP/release.jks"
-          cp android/app/build/outputs/apk/release/app-release.apk NumberCipher-Android.apk
-          ls -l NumberCipher-Android.apk
+          cp android/app/build/outputs/apk/release/app-release.apk Cipherwords-Android.apk
+          ls -l Cipherwords-Android.apk
           APKSIGNER=$(ls -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
           if [ -n "$APKSIGNER" ]; then
-            CERT=$("$APKSIGNER" verify --print-certs NumberCipher-Android.apk 2>&1 | grep -E "certificate (DN|SHA-256)" | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
+            CERT=$("$APKSIGNER" verify --print-certs Cipherwords-Android.apk 2>&1 | grep -E "certificate (DN|SHA-256)" | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
             echo "::notice title=APK signer::$CERT"
           fi
       - uses: actions/upload-artifact@v4
         with:
           name: android
-          path: NumberCipher-Android.apk
+          path: Cipherwords-Android.apk
 
   publish:
     needs: [check, mac, windows, android]
@@ -147,26 +151,28 @@ jobs:
           TAG: ${{ needs.check.outputs.tag }}
         run: |
           cp recover.py dist/
-          (cd dist && sha256sum NumberCipher-* recover.py > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          (cd dist && sha256sum Cipherwords-* recover.py > SHA256SUMS.txt && cat SHA256SUMS.txt)
           cat > notes.md <<'EOF'
           | Download | For |
           |---|---|
-          | `NumberCipher-macOS-arm64.zip` | Mac with Apple Silicon (M1–M4 and newer), macOS 14+ |
-          | `NumberCipher-Windows-x64.exe` | Most Windows 10/11 PCs (Intel or AMD) |
-          | `NumberCipher-Windows-arm64.exe` | Windows on ARM (Snapdragon, Surface Pro X, etc.) |
-          | `NumberCipher-Windows-x64-small.exe` | Small edition for Intel/AMD PCs that have the [.NET Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) 10 or newer installed |
-          | `NumberCipher-Windows-arm64-small.exe` | Small edition for Windows on ARM, same requirement |
-          | `NumberCipher-Android.apk` | Android 8.0+ phones, tablets, foldables and Chromebooks |
+          | `Cipherwords-macOS-arm64.zip` | Mac with Apple Silicon (M1–M4 and newer), macOS 14+ |
+          | `Cipherwords-Windows-x64.exe` | Most Windows 10/11 PCs (Intel or AMD) |
+          | `Cipherwords-Windows-arm64.exe` | Windows on ARM (Snapdragon, Surface Pro X, etc.) |
+          | `Cipherwords-Windows-x64-small.exe` | Small edition for Intel/AMD PCs that have the [.NET Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) 10 or newer installed |
+          | `Cipherwords-Windows-arm64-small.exe` | Small edition for Windows on ARM, same requirement |
+          | `Cipherwords-Android.apk` | Android 8.0+ phones, tablets, foldables and Chromebooks |
           | `recover.py` | Decrypts codes on any computer with Python (`pip3 install cryptography`) |
 
           Codes are interchangeable: anything encrypted on one platform decrypts on the others.
+          Since 1.5 the apps are called Cipherwords (formerly Number Cipher), encrypt any text and
+          write codes as English words; letter codes made by earlier versions still decrypt.
 
           **Full or small Windows edition?** Both are the same app. The full edition includes everything
           it needs. The small edition is a fraction of the size but needs Microsoft's free .NET Desktop
           Runtime; if it's missing, Windows shows a message with a download link the first time you open it.
 
           **First launch.** None of the apps come from an app store yet.
-          - Mac: right-click **Number Cipher.app** → **Open**, then confirm.
+          - Mac: right-click **Cipherwords.app** → **Open**, then confirm.
           - Windows: if SmartScreen appears, click **More info** → **Run anyway**.
           - Android: open the APK on the phone and allow your browser or file manager to
             **install unknown apps** when asked. Play Protect may ask you to confirm; choose **Install anyway**.
@@ -176,5 +182,5 @@ jobs:
           gh release create "$TAG" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Number Cipher $TAG" \
+            --title "Cipherwords $TAG" \
             --notes-file notes.md

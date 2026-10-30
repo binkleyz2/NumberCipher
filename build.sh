@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds "Number Cipher.app" natively for Apple Silicon (M4 or newer preferred).
+# Builds "Cipherwords.app" natively for Apple Silicon (M4 or newer preferred).
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -10,22 +10,22 @@ fi
 
 swift build -c release --arch arm64
 BIN="$(swift build -c release --arch arm64 --show-bin-path)/NumberCipher"
-APP="build/Number Cipher.app"
+APP="build/Cipherwords.app"
 VERSION="$(tr -d '[:space:]' < VERSION)"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/NumberCipher"
+cp "$BIN" "$APP/Contents/MacOS/Cipherwords"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Number Cipher</string>
-  <key>CFBundleDisplayName</key><string>Number Cipher</string>
+  <key>CFBundleName</key><string>Cipherwords</string>
+  <key>CFBundleDisplayName</key><string>Cipherwords</string>
   <key>CFBundleIdentifier</key><string>local.numbercipher</string>
-  <key>CFBundleExecutable</key><string>NumberCipher</string>
+  <key>CFBundleExecutable</key><string>Cipherwords</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>${VERSION}</string>
   <key>CFBundleVersion</key><string>${VERSION}</string>

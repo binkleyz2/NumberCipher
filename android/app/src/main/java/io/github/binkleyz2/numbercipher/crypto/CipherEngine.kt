@@ -20,15 +20,21 @@ class CancelledException : Exception("Cancelled")
 data class WorkProgress(val fraction: Float, val secondsLeft: Int?, val rounds: Int)
 
 /**
- * Number Cipher code format — identical to the Mac and Windows apps.
+ * Cipherwords code format — identical to the Mac and Windows apps.
  *
  * Version 2 (written here):
  *   bytes  = version(1)=2 | rounds(4, big-endian) | salt(16) | nonce(12) | ciphertext(n) | tag(16)
  *   key    = PBKDF2-HMAC-SHA256(NFC(passphrase) as UTF-8, salt, rounds) -> 32 bytes
  *   cipher = AES-256-GCM, with version|rounds|salt as authenticated data
  * Version 1 (still decrypted): version(1)=1 | salt(16) | nonce | ct | tag, fixed 2,000,000 rounds.
- * Both: plaintext padded with 0x00 to a multiple of 16 bytes; each byte -> two letters
- * from "ABCDEFGHJKLMNPQR" (no I or O).
+ * Both: plaintext is UTF-8 text padded with 0x00 to the next multiple of 16 bytes.
+ *
+ * Written as words (1.5+): the bytes are read as a bit string, most significant bit first, split
+ * into 11-bit numbers (the last padded with 0 bits), each picking a word from the BIP39 English list
+ * ([WordList]). Every v2 code is 49 + 16k bytes, so the byte count is the largest
+ * n <= 11*words/8 with n % 16 == 1, and ceil(8n/11) must equal the word count.
+ * Written as letters (1.0–1.4, still read): each byte -> two letters from "ABCDEFGHJKLMNPQR".
+ * A code containing any letter outside that set is read as words.
  *
  * How Android meets the ~10 s target on any phone: instead of predicting a round count from
  * a benchmark (fragile on phones that hop between big and little cores, or slow down when
@@ -54,15 +60,22 @@ class CipherEngine(
         const val TAG_LENGTH = 16
         const val PAD_BLOCK = 16
         const val ALPHABET = "ABCDEFGHJKLMNPQR"
-        private const val ALLOWED = "0123456789 ,.-\n\t"
+        const val MAX_TEXT_BYTES = 20_000
+        const val WORDS_PER_LINE = 6
         private const val CHUNK = 32_768
 
-        const val MSG_ONLY_NUMBERS = "Only digits, spaces, commas, periods, dashes and line breaks are allowed."
-        const val MSG_NO_DIGITS = "Enter at least one number."
+        const val MSG_NO_TEXT = "Enter some text to encrypt."
+        const val MSG_NULL_CHAR = "The text contains a null character, which can't be encrypted."
+        const val MSG_TOO_LONG = "That's too much text (the limit is 20,000 bytes, about 20,000 English characters)."
+        const val MSG_WORD_COUNT = "A word seems to be missing or extra. Check the code against the original."
+        const val MSG_FIRST_WORD = "The first word of the code looks wrong. Check it for a typo."
+        const val MSG_LAST_WORD = "The last word of the code looks wrong. Check it for a typo."
+        fun msgUnknownWord(word: String, position: Int) =
+            "\u201C$word\u201D (word $position) isn't one of the code words. Check its spelling."
         const val MSG_NO_PASSPHRASE = "Enter a passphrase."
-        const val MSG_MALFORMED = "That doesn't look like a Number Cipher code (check for typos or missing letters)."
+        const val MSG_MALFORMED = "That doesn't look like a Cipherwords code (check for typos or missing letters)."
         const val MSG_FIRST_LETTER = "The first letter of a code is always A. Check the start of the code for a typo."
-        const val MSG_NEWER = "This code was made by a newer version of Number Cipher. Update this app to decrypt it."
+        const val MSG_NEWER = "This code was made by a newer version of Cipherwords. Update this app to decrypt it."
         const val MSG_WRONG = "Wrong passphrase, or the code was altered."
 
         private val random = SecureRandom()
@@ -76,6 +89,53 @@ class CipherEngine(
             if (passphrase.any { it.isDigit() }) pool += 10
             if (passphrase.any { !it.isLetterOrDigit() }) pool += 33
             return passphrase.length * (Math.log(maxOf(pool, 2).toDouble()) / Math.log(2.0))
+        }
+
+        private val wordIndex: Map<String, Int> by lazy { WordList.words.withIndex().associate { it.value to it.index } }
+        private val prefixIndex: Map<String, Int> by lazy { WordList.words.withIndex().associate { it.value.take(4) to it.index } }
+
+        /** True if [code] has any letter outside the old letter-code alphabet, so it must be words. */
+        fun isWordCode(code: String): Boolean =
+            code.any { (it in 'a'..'z' || it in 'A'..'Z') && it.uppercaseChar() !in ALPHABET }
+
+        /** Reads a word code or an old letter code. */
+        fun decode(code: String): ByteArray = if (isWordCode(code)) fromWords(code) else fromLetters(code)
+
+        fun toWords(data: ByteArray): String {
+            val words = ArrayList<String>((data.size * 8 + 10) / 11)
+            var acc = 0; var bits = 0
+            for (b in data) {
+                acc = acc shl 8 or (b.toInt() and 0xFF); bits += 8
+                if (bits >= 11) { bits -= 11; words.add(WordList.words[acc ushr bits and 0x7FF]) }
+                acc = acc and ((1 shl bits) - 1)
+            }
+            if (bits > 0) words.add(WordList.words[acc shl (11 - bits) and 0x7FF])
+            return words.chunked(WORDS_PER_LINE).joinToString("\n") { it.joinToString(" ").uppercase() }
+        }
+
+        fun fromWords(code: String): ByteArray {
+            // Words are runs of ASCII letters; anything else (spaces, line breaks, numbering, punctuation) separates them.
+            val tokens = Regex("[A-Za-z]+").findAll(code).map { it.value }.toList()
+            val indices = tokens.mapIndexed { i, t ->
+                val w = t.lowercase()
+                wordIndex[w] ?: (if (w.length >= 4) prefixIndex[w.take(4)] else null)
+                    ?: throw CipherException(msgUnknownWord(t.uppercase(), i + 1))
+            }
+            val count = indices.size
+            var n = count * 11 / 8
+            n -= (n - 1).mod(16)
+            if (n < 49 + PAD_BLOCK || (n * 8 + 10) / 11 != count) throw CipherException(MSG_WORD_COUNT)
+
+            val out = ByteArray(n)
+            var o = 0
+            var acc = 0; var bits = 0
+            for (v in indices) {
+                acc = acc shl 11 or v; bits += 11
+                while (bits >= 8 && o < n) { bits -= 8; out[o++] = (acc ushr bits).toByte() }
+                acc = acc and ((1 shl bits) - 1)
+            }
+            if (acc != 0) throw CipherException(MSG_LAST_WORD)
+            return out
         }
 
         fun toLetters(data: ByteArray): String = buildString(data.size * 2) {
@@ -98,8 +158,8 @@ class CipherEngine(
 
         fun group(s: String, size: Int = 5): String = s.chunked(size).joinToString(" ")
 
-        /** Reads the header: (header length, rounds). */
-        fun readHeader(bytes: ByteArray): Pair<Int, Int> {
+        /** Reads the header: (header length, rounds). [words]: the code was written as words. */
+        fun readHeader(bytes: ByteArray, words: Boolean = false): Pair<Int, Int> {
             if (bytes.isEmpty()) throw CipherException(MSG_MALFORMED)
             return when (val v = bytes[0].toInt() and 0xFF) {
                 1 -> (1 + SALT_LENGTH) to V1_ROUNDS
@@ -111,36 +171,37 @@ class CipherEngine(
                 }
                 0 -> throw CipherException(MSG_MALFORMED)
                 in 3..15 -> throw CipherException(MSG_NEWER)   // future versions all start with "A"
-                else -> throw CipherException(MSG_FIRST_LETTER) // any other first letter is a typo
+                else -> throw CipherException(if (words) MSG_FIRST_WORD else MSG_FIRST_LETTER) // any other first letter/word is a typo
             }
         }
 
         /** Rounds stored in a code, or null if it can't be read. */
-        fun roundsIn(code: String): Int? = try { readHeader(fromLetters(code)).second } catch (_: CipherException) { null }
+        fun roundsIn(code: String): Int? = try { readHeader(decode(code), isWordCode(code)).second } catch (_: CipherException) { null }
 
         private fun passwordBytes(passphrase: String) =
             Normalizer.normalize(passphrase, Normalizer.Form.NFC).toByteArray(Charsets.UTF_8)
     }
 
     /**
-     * Encrypts [numbers]. Normally runs until ~10 s of CPU work; [fixedRounds] forces an
+     * Encrypts [text]. Normally runs until ~10 s of CPU work; [fixedRounds] forces an
      * exact count (tests). [onProgress] is called on the worker thread.
      */
     fun encrypt(
-        numbers: String,
+        text: String,
         passphrase: String,
         fixedRounds: Int? = null,
         isCancelled: () -> Boolean = { false },
         onProgress: (WorkProgress) -> Unit = {},
     ): String {
-        val cleaned = numbers.replace("\r\n", "\n").replace('\r', '\n').trim()
-        if (cleaned.any { it !in ALLOWED }) throw CipherException(MSG_ONLY_NUMBERS)
-        if (cleaned.none { it in '0'..'9' }) throw CipherException(MSG_NO_DIGITS)
-        if (passphrase.isEmpty()) throw CipherException(MSG_NO_PASSPHRASE)
+        val cleaned = text.replace("\r\n", "\n").replace('\r', '\n').trim()
+        if (cleaned.isEmpty()) throw CipherException(MSG_NO_TEXT)
+        if ('\u0000' in cleaned) throw CipherException(MSG_NULL_CHAR)
+        val utf8 = cleaned.toByteArray(Charsets.UTF_8)
+        if (utf8.size > MAX_TEXT_BYTES) { utf8.fill(0); throw CipherException(MSG_TOO_LONG) }
+        if (passphrase.isEmpty()) { utf8.fill(0); throw CipherException(MSG_NO_PASSPHRASE) }
 
-        val text = cleaned.toByteArray(Charsets.UTF_8)
-        val plain = text.copyOf((text.size / PAD_BLOCK + 1) * PAD_BLOCK)
-        text.fill(0)
+        val plain = utf8.copyOf((utf8.size / PAD_BLOCK + 1) * PAD_BLOCK)
+        utf8.fill(0)
         val salt = ByteArray(SALT_LENGTH).also(random::nextBytes)
         val pw = passwordBytes(passphrase)
         val key = ByteArray(32)
@@ -176,7 +237,7 @@ class CipherEngine(
             cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(TAG_LENGTH * 8, nonce))
             cipher.updateAAD(header)
             val sealed = cipher.doFinal(plain) // ciphertext || tag
-            return group(toLetters(header + nonce + sealed))
+            return toWords(header + nonce + sealed)
         } finally {
             key.fill(0); pw.fill(0); plain.fill(0)
         }
@@ -190,8 +251,9 @@ class CipherEngine(
         onProgress: (WorkProgress) -> Unit = {},
     ): String {
         if (passphrase.isEmpty()) throw CipherException(MSG_NO_PASSPHRASE)
-        val bytes = fromLetters(code)
-        val (headerLength, rounds) = readHeader(bytes)
+        val words = isWordCode(code)
+        val bytes = if (words) fromWords(code) else fromLetters(code)
+        val (headerLength, rounds) = readHeader(bytes, words)
         if (bytes.size < headerLength + NONCE_LENGTH + TAG_LENGTH) throw CipherException(MSG_MALFORMED)
 
         val header = bytes.copyOfRange(0, headerLength)

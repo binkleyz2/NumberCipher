@@ -7,6 +7,8 @@ on:
   push:
     branches: [main]
     paths: ['android/**', 'recover.py', '.github/workflows/android.yml']
+  pull_request:
+    paths: ['android/**', 'recover.py', '.github/workflows/android.yml']
   workflow_dispatch:
 
 permissions:
@@ -45,8 +47,8 @@ jobs:
       - name: recover.py (Mac format) decrypts a code made by the Android engine
         run: |
           pip install --quiet cryptography
-          got=$(python -c "import recover as r,sys; print(r.decrypt(open(sys.argv[1]).read(), 'maple orbit tundra swivel'))" android/app/build/interop/android_code.txt)
-          if [ "$got" = "6011 0009 9013 9424" ]; then echo "PASS android -> recover.py"; else echo "FAIL: '$got'"; exit 1; fi
+          got=$(PYTHONIOENCODING=utf-8 python -c "import recover as r,sys; print(r.decrypt(open(sys.argv[1]).read(), 'maple orbit tundra swivel'))" android/app/build/interop/android_code.txt)
+          if [ "$got" = "Android → recover.py é 6011" ]; then echo "PASS android -> recover.py"; else echo "FAIL: '$got'"; exit 1; fi
 
       - name: Build APKs
         run: gradle -p android :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease --stacktrace

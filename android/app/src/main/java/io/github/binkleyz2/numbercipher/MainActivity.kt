@@ -80,7 +80,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        // Keep codes and numbers out of screenshots, screen recordings and the recent-apps preview.
+        // Keep codes and text out of screenshots, screen recordings and the recent-apps preview.
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         if (intent?.getBooleanExtra(SelfTest.EXTRA, false) == true) thread(name = "selftest") { SelfTest.run() }
         setContent { NumberCipherTheme { CipherScreen() } }
@@ -94,13 +94,17 @@ object SelfTest {
     private const val MAC_FORMAT_CODE =
         "ACAAA EKDQA DBGEF LEMLQ DKHGL GKKPB AMQKD EBAAC LAMBL DQBRP LQLPN GHRNL CJNPN CQNHE DFKJL GHNNK KHMMR " +
         "CGMJL CMFNB KKBDH KEAQB JLBDE FEFPA DRPQP KMELF JEGCM KRJHR CNPNJ NJDDH PQHRK RNNEF RLJCD EM"
+    // Word code made by recover.py, same passphrase.
+    private const val WORD_CODE = "ACOUSTIC ABILITY CEILING SCATTER SUBJECT PITCH ELEMENT LIVE DAY VIEW BONE POPULAR MENTION GALAXY SIX PHYSICAL GHOST GLUE ENGAGE SOLID VALID BULLET TIP ASTHMA CAPITAL MORNING FEVER IRON BASIC TRACK FANCY CREEK BALL AWAY ABANDON CRACK NEWS HELMET CLIFF CAGE DEPOSIT COLLECT QUESTION FLAG REFORM POST USED SIBLING PRIVATE DRIP MATH ORANGE CART ENTRY DANCE DIET MARKET SHOCK BONE POLAR RESULT BORDER REFLECT JAR SPORT TILT COURSE EVOLVE COOK KID DRIFT YOUNG OUTSIDE FATAL SING IMPULSE GLIMPSE RIDE AWAKE FEATURE UNLOCK RESEMBLE SCALE"
+    private const val WORD_TEXT = "Meet at the caf\u00E9, 7:30 pm.\nBring the 4111 key \uD83D\uDD11"
 
     fun run() {
         val ok = try {
             val e = CipherEngine()
             val a = e.decrypt(MAC_FORMAT_CODE, "maple orbit tundra swivel") == "4111 2222 3333 4444\n555-0199"
-            val b = e.decrypt(e.encrypt("8675 309", "self test", fixedRounds = 300_000), "self test") == "8675 309"
-            a && b
+            val b = e.decrypt(e.encrypt("Self test \u00E9 8675 309", "self test", fixedRounds = 300_000), "self test") == "Self test \u00E9 8675 309"
+            val c = e.decrypt(WORD_CODE, "maple orbit tundra swivel") == WORD_TEXT
+            a && b && c
         } catch (t: Throwable) {
             Log.e("NumberCipher", "SELFTEST error", t); false
         }
@@ -140,7 +144,7 @@ fun CipherScreen(vm: CipherViewModel = viewModel()) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Number Cipher") },
+                title = { Text("Cipherwords") },
                 actions = {
                     IconButton(onClick = { showInfo = true }) {
                         Icon(Icons.Outlined.Info, contentDescription = "Device speed and about")
@@ -172,13 +176,13 @@ fun CipherScreen(vm: CipherViewModel = viewModel()) {
                 OutlinedTextField(
                     value = vm.input,
                     onValueChange = { vm.input = it },
-                    label = { Text(if (encrypt) "Numbers to encrypt" else "Letter code to decrypt") },
-                    textStyle = mono,
+                    label = { Text(if (encrypt) "Text to encrypt" else "Code to decrypt (words, or an older letter code)") },
+                    textStyle = if (encrypt) MaterialTheme.typography.bodyLarge else mono,
                     minLines = 3,
                     readOnly = vm.busy,
                     keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Ascii,
-                        capitalization = if (encrypt) KeyboardCapitalization.None else KeyboardCapitalization.Characters,
+                        keyboardType = if (encrypt) KeyboardType.Text else KeyboardType.Ascii,
+                        capitalization = if (encrypt) KeyboardCapitalization.Sentences else KeyboardCapitalization.Characters,
                         autoCorrectEnabled = false,
                     ),
                     trailingIcon = if (!encrypt && !vm.busy) ({ TextButton(onClick = vm::paste) { Text("Paste") } }) else null,
@@ -251,15 +255,15 @@ fun CipherScreen(vm: CipherViewModel = viewModel()) {
                 if (vm.output.isNotEmpty()) {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(if (encrypt) "Letter code" else "Numbers", fontWeight = FontWeight.Bold)
-                            SelectionContainer { Text(vm.output, style = mono) }
+                            Text(if (encrypt) "Word code" else "Text", fontWeight = FontWeight.Bold)
+                            SelectionContainer { Text(vm.output, style = if (encrypt) mono else MaterialTheme.typography.bodyLarge) }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 OutlinedButton(onClick = vm::copy) { Text(if (vm.copied) "Copied — clears in 60s" else "Copy") }
                                 if (encrypt) {
-                                    // Only the letter code is offered for sharing, never the decrypted numbers.
+                                    // Only the code is offered for sharing, never the decrypted text.
                                     OutlinedButton(onClick = {
                                         val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, vm.output)
-                                        context.startActivity(Intent.createChooser(send, "Share letter code"))
+                                        context.startActivity(Intent.createChooser(send, "Share code"))
                                     }) { Text("Share") }
                                 }
                             }

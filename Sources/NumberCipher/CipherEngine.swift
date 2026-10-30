@@ -3,7 +3,7 @@ import CryptoKit
 import CommonCrypto
 import Security
 
-/// Number Cipher code format
+/// Cipherwords code format
 ///
 /// Version 2 (written by this app):
 ///   bytes  = version(1)=2 | rounds(4, big-endian) | salt(16) | nonce(12) | ciphertext(n) | tag(16)
@@ -13,19 +13,31 @@ import Security
 ///
 /// Version 1 (still decrypted): version(1)=1 | salt(16) | nonce | ct | tag, fixed 2,000,000 rounds.
 ///
-/// Both: plaintext padded with 0x00 to a multiple of 16 bytes; each byte -> two letters
-/// from "ABCDEFGHJKLMNPQR" (no I or O).
-enum CipherError: LocalizedError {
-    case invalidNumbers, noDigits, emptyPassphrase, malformedCode, badFirstLetter, unsupportedVersion, authenticationFailed, internalError
+/// Both: plaintext is UTF-8 text padded with 0x00 to the next multiple of 16 bytes.
+///
+/// Written as words (1.5+): the bytes are read as a bit string, most significant bit first, split
+/// into 11-bit numbers (the last padded with 0 bits), each picking a word from the BIP39 English list
+/// (WordList.swift). Every v2 code is 49 + 16k bytes, so the byte count is the largest
+/// n <= 11*words/8 with n % 16 == 1, and ceil(8n/11) must equal the word count.
+/// Written as letters (1.0–1.4, still read): each byte -> two letters from "ABCDEFGHJKLMNPQR".
+/// A code containing any letter outside that set is read as words. recover.py documents the same.
+enum CipherError: LocalizedError, Equatable {
+    case emptyText, nullCharacter, textTooLong, emptyPassphrase, malformedCode, badFirstLetter, unsupportedVersion, authenticationFailed, internalError
+    case unknownWord(String, Int), wordCount, badFirstWord, badLastWord
 
     var errorDescription: String? {
         switch self {
-        case .invalidNumbers:       return "Only digits, spaces, commas, periods, dashes and line breaks are allowed."
-        case .noDigits:             return "Enter at least one number."
+        case .emptyText:            return "Enter some text to encrypt."
+        case .nullCharacter:        return "The text contains a null character, which can't be encrypted."
+        case .textTooLong:          return "That's too much text (the limit is 20,000 bytes, about 20,000 English characters)."
+        case .unknownWord(let w, let i): return "\u{201C}\(w)\u{201D} (word \(i)) isn't one of the code words. Check its spelling."
+        case .wordCount:            return "A word seems to be missing or extra. Check the code against the original."
+        case .badFirstWord:         return "The first word of the code looks wrong. Check it for a typo."
+        case .badLastWord:          return "The last word of the code looks wrong. Check it for a typo."
         case .emptyPassphrase:      return "Enter a passphrase."
-        case .malformedCode:        return "That doesn't look like a Number Cipher code (check for typos or missing letters)."
+        case .malformedCode:        return "That doesn't look like a Cipherwords code (check for typos or missing letters)."
         case .badFirstLetter:       return "The first letter of a code is always A. Check the start of the code for a typo."
-        case .unsupportedVersion:   return "This code was made by a newer version of Number Cipher. Update this app to decrypt it."
+        case .unsupportedVersion:   return "This code was made by a newer version of Cipherwords. Update this app to decrypt it."
         case .authenticationFailed: return "Wrong passphrase, or the code was altered."
         case .internalError:        return "Something went wrong inside the encryption engine."
         }
@@ -42,17 +54,22 @@ enum CipherEngine {
     static let saltLength = 16
     static let padBlock = 16
     static let alphabet: [Character] = Array("ABCDEFGHJKLMNPQR")
-    private static let allowed = Set("0123456789 ,.-\n\t")
+    static let maxTextBytes = 20_000
+    static let wordsPerLine = 6
+    private static let wordIndex: [String: Int] = Dictionary(uniqueKeysWithValues: WordList.words.enumerated().map { ($1, $0) })
+    private static let prefixIndex: [String: Int] = Dictionary(uniqueKeysWithValues: WordList.words.enumerated().map { (String($1.prefix(4)), $0) })
 
     /// Rounds that take ~10 s on this Mac. Measured once, on first use, then reused.
     static let calibratedRounds: UInt32 = calibrate()
 
     // MARK: Public API
 
-    static func encrypt(_ numbers: String, passphrase: String) throws -> String {
-        let cleaned = numbers.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard cleaned.allSatisfy({ allowed.contains($0) }) else { throw CipherError.invalidNumbers }
-        guard cleaned.contains(where: \.isNumber) else { throw CipherError.noDigits }
+    static func encrypt(_ text: String, passphrase: String, rounds fixedRounds: UInt32? = nil) throws -> String {
+        let cleaned = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { throw CipherError.emptyText }
+        guard !cleaned.unicodeScalars.contains("\u{0}") else { throw CipherError.nullCharacter }
+        guard cleaned.utf8.count <= maxTextBytes else { throw CipherError.textTooLong }
         guard !passphrase.isEmpty else { throw CipherError.emptyPassphrase }
 
         var plain = Array(cleaned.utf8)
@@ -60,7 +77,7 @@ enum CipherEngine {
         plain += [UInt8](repeating: 0, count: padded - plain.count)
         defer { wipe(&plain) }
 
-        let rounds = calibratedRounds
+        let rounds = fixedRounds ?? calibratedRounds
         let salt = try randomBytes(saltLength)
         var header = Data([currentVersion])
         header.append(contentsOf: [UInt8(rounds >> 24), UInt8(rounds >> 16 & 0xFF), UInt8(rounds >> 8 & 0xFF), UInt8(rounds & 0xFF)])
@@ -69,12 +86,13 @@ enum CipherEngine {
         let key = try deriveKey(passphrase: passphrase, salt: salt, rounds: rounds)
         let sealed = try AES.GCM.seal(Data(plain), using: key, nonce: AES.GCM.Nonce(), authenticating: header)
         guard let combined = sealed.combined else { throw CipherError.internalError }
-        return group(toLetters(header + combined))
+        return toWords(header + combined)
     }
 
     static func decrypt(_ code: String, passphrase: String) throws -> String {
         guard !passphrase.isEmpty else { throw CipherError.emptyPassphrase }
-        let bytes = [UInt8](try fromLetters(code))
+        let words = isWordCode(code)
+        let bytes = [UInt8](try words ? fromWords(code) : fromLetters(code))
         guard let version = bytes.first else { throw CipherError.malformedCode }
 
         let headerLength: Int
@@ -94,8 +112,8 @@ enum CipherEngine {
             // Future format versions all start with "A" (byte < 16).
             throw CipherError.unsupportedVersion
         default:
-            // A first letter other than "A" can't be any version: it's a typo.
-            throw CipherError.badFirstLetter
+            // A first letter other than "A" (or a first word outside ACOUSTIC..ADDRESS) can't be any version: it's a typo.
+            throw words ? CipherError.badFirstWord : CipherError.badFirstLetter
         }
         guard bytes.count >= headerLength + 12 + 16 else { throw CipherError.malformedCode }
 
@@ -117,7 +135,7 @@ enum CipherEngine {
 
     /// Rough time a decrypt of `code` will take on this Mac, for the UI. Nil if unreadable.
     static func estimatedSeconds(forCode code: String) -> Double? {
-        guard let bytes = try? [UInt8](fromLetters(code)), let v = bytes.first else { return nil }
+        guard let bytes = try? [UInt8](decode(code)), let v = bytes.first else { return nil }
         let rounds: UInt32
         if v == 1 { rounds = v1Rounds }
         else if v == 2, bytes.count >= 5 { rounds = bytes[1..<5].reduce(UInt32(0)) { $0 << 8 | UInt32($1) } }
@@ -171,7 +189,68 @@ enum CipherEngine {
         return UInt32(min(max(rounded, Double(minRounds)), Double(maxRounds) / 2))
     }
 
-    // MARK: Letter encoding
+    // MARK: Word encoding
+
+    /// True if `code` has any letter outside the old letter-code alphabet, so it must be words.
+    static func isWordCode(_ code: String) -> Bool {
+        code.unicodeScalars.contains { $0.isASCII && $0.properties.isAlphabetic && !alphabet.contains(Character(String($0).uppercased())) }
+    }
+
+    /// Reads a word code or an old letter code.
+    static func decode(_ code: String) throws -> Data {
+        try isWordCode(code) ? fromWords(code) : fromLetters(code)
+    }
+
+    static func toWords(_ data: Data) -> String {
+        var words = [String]()
+        words.reserveCapacity((data.count * 8 + 10) / 11)
+        var acc: UInt32 = 0, bits = 0
+        for b in data {
+            acc = acc << 8 | UInt32(b); bits += 8
+            if bits >= 11 { bits -= 11; words.append(WordList.words[Int(acc >> UInt32(bits) & 0x7FF)]) }
+            acc &= (1 << UInt32(bits)) - 1
+        }
+        if bits > 0 { words.append(WordList.words[Int(acc << UInt32(11 - bits) & 0x7FF)]) }
+        return stride(from: 0, to: words.count, by: wordsPerLine)
+            .map { words[$0..<min($0 + wordsPerLine, words.count)].joined(separator: " ").uppercased() }
+            .joined(separator: "\n")
+    }
+
+    static func fromWords(_ code: String) throws -> Data {
+        // Words are runs of ASCII letters; anything else (spaces, line breaks, numbering, punctuation) separates them.
+        var tokens = [String](), current = ""
+        for u in code.unicodeScalars {
+            if u.isASCII && u.properties.isAlphabetic { current.unicodeScalars.append(u) }
+            else if !current.isEmpty { tokens.append(current); current = "" }
+        }
+        if !current.isEmpty { tokens.append(current) }
+
+        var indices = [Int]()
+        indices.reserveCapacity(tokens.count)
+        for (i, t) in tokens.enumerated() {
+            let w = t.lowercased()
+            if let v = wordIndex[w] { indices.append(v) }
+            else if w.count >= 4, let v = prefixIndex[String(w.prefix(4))] { indices.append(v) }
+            else { throw CipherError.unknownWord(t.uppercased(), i + 1) }
+        }
+
+        let count = indices.count
+        var n = count * 11 / 8
+        n -= (n - 1) % 16
+        guard n >= 49 + padBlock, (n * 8 + 10) / 11 == count else { throw CipherError.wordCount }
+
+        var out = Data(capacity: n)
+        var acc: UInt32 = 0, bits = 0
+        for v in indices {
+            acc = acc << 11 | UInt32(v); bits += 11
+            while bits >= 8 && out.count < n { bits -= 8; out.append(UInt8(acc >> UInt32(bits) & 0xFF)) }
+            acc &= (1 << UInt32(bits)) - 1
+        }
+        guard acc == 0 else { throw CipherError.badLastWord }
+        return out
+    }
+
+    // MARK: Letter encoding (codes made by versions 1.0–1.4)
 
     static func toLetters(_ data: Data) -> String {
         var s = String()

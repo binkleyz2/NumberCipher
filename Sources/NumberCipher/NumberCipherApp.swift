@@ -15,7 +15,7 @@ struct NumberCipherApp: App {
     private let model = CipherModel()
 
     var body: some Scene {
-        WindowGroup("Number Cipher") {
+        WindowGroup("Cipherwords") {
             ContentView(model: model)
         }
         .windowResizability(.contentMinSize)

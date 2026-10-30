@@ -98,11 +98,12 @@ struct ContentView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
 
-            Text(model.mode == .encrypt ? "Numbers to encrypt" : "Letter code to decrypt")
+            Text(model.mode == .encrypt ? "Text to encrypt" : "Code to decrypt (words, or an older letter code)")
                 .font(.headline)
 
             TextEditor(text: bind(\.input))
-                .font(.system(.body, design: .monospaced))
+                .font(model.mode == .encrypt ? .body : .system(.body, design: .monospaced))
+                .autocorrectionDisabled()
                 .scrollContentBackground(.hidden)
                 .padding(6)
                 .frame(minHeight: 90)
@@ -167,18 +168,18 @@ struct ContentView: View {
             if !model.output.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text(model.mode == .encrypt ? "Letter code" : "Numbers").font(.headline)
+                        Text(model.mode == .encrypt ? "Word code" : "Text").font(.headline)
                         Spacer()
                         Button(model.copied ? "Copied — clears in 60s" : "Copy", action: model.copy)
                     }
                     ScrollView {
                         Text(model.output)
-                            .font(.system(.body, design: .monospaced))
+                            .font(model.mode == .encrypt ? .system(.body, design: .monospaced) : .body)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(10)
                     }
-                    .frame(minHeight: 70, maxHeight: 180)
+                    .frame(minHeight: 70, maxHeight: 260)
                     .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .controlBackgroundColor)))
                 }
             }

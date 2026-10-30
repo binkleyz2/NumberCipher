@@ -142,7 +142,7 @@ class CipherViewModel(app: Application) : AndroidViewModel(app) {
     /** Copies the result, marked sensitive (hidden from clipboard previews), and clears it after 60 s. */
     fun copy() {
         val cm = getApplication<Application>().getSystemService(ClipboardManager::class.java) ?: return
-        val clip = ClipData.newPlainText("Number Cipher", output)
+        val clip = ClipData.newPlainText("Cipherwords", output)
         clip.description.extras = PersistableBundle().apply {
             putBoolean("android.content.extra.IS_SENSITIVE", true)
         }

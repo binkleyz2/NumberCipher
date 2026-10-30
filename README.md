@@ -1,6 +1,12 @@
-# Number Cipher
+# Cipherwords
 
-Native apps for **Mac** (Apple Silicon, macOS 14+), **Windows** (10/11, x64 and ARM64) and **Android** (8.0+ phones, tablets, foldables and Chromebooks) that turn number sequences into a letter-only code, and back. All three use the same code format and strength, so a code made on one decrypts on the others.
+Native apps for **Mac** (Apple Silicon, macOS 14+), **Windows** (10/11, x64 and ARM64) and **Android** (8.0+ phones, tablets, foldables and Chromebooks) that turn any text (numbers, notes, passwords, addresses, any language or emoji) into a code made of ordinary English words, and back. All three use the same code format and strength, so a code made on one decrypts on the others. (Cipherwords was called Number Cipher before version 1.5; its codes still decrypt.)
+
+```
+ACOUSTIC ABILITY CEILING SCATTER SUBJECT PITCH
+ELEMENT LIVE DAY VIEW BONE POPULAR
+...
+```
 
 Prebuilt downloads are on the repo's **Releases** page.
 
@@ -12,7 +18,7 @@ Requires Xcode or the Xcode Command Line Tools (`xcode-select --install`).
 cd NumberCipher
 chmod +x build.sh
 ./build.sh
-open "build/Number Cipher.app"
+open "build/Cipherwords.app"
 ```
 
 ## Build — Windows
@@ -21,7 +27,7 @@ Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). F
 
 ```powershell
 dotnet publish windows/NumberCipher.Windows -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o out
-out\NumberCipher.exe
+out\Cipherwords.exe
 ```
 
 Use `-r win-arm64` for Windows on ARM. `dotnet run --project windows/InteropTest` runs the compatibility tests.
@@ -31,6 +37,10 @@ Use `-r win-arm64` for Windows on ARM. `dotnet run --project windows/InteropTest
 | `windows/NumberCipher.Core` | The cipher engine (same format as the Mac app) |
 | `windows/NumberCipher.Windows` | The Windows app window |
 | `windows/InteropTest` | Tests that codes cross between Windows, Mac and `recover.py` |
+
+The folders, project files and Android package still use the original internal name, `NumberCipher`. Changing the Android package name would make Android treat the app as a different one, so it couldn't update the installed app.
+
+Mac and `recover.py` tests are in `Tests/`. The **Checks** workflow runs every platform's tests on each pull request.
 
 ## Build — Android
 
@@ -56,20 +66,22 @@ Because each code stores its round count, a code made on a fast device takes pro
 
 ## Use
 
-- **Encrypt:** type numbers (digits, spaces, commas, periods, dashes, line breaks), enter a passphrase twice, press ⌘↩ (Ctrl+Enter on Windows). Copy the letter code.
-- **Decrypt:** paste the letter code, enter the passphrase, press ⌘↩ (Ctrl+Enter). Spaces and capitalization in the letter code don't matter (it only uses capital letters A–R). The passphrase is case-sensitive: it must match exactly.
+- **Encrypt:** type or paste any text (up to 20,000 bytes, about 20,000 English characters), enter a passphrase twice, press ⌘↩ (Ctrl+Enter on Windows). Copy the word code.
+- **Decrypt:** paste the word code, enter the passphrase, press ⌘↩ (Ctrl+Enter). Capitalization, line breaks, commas and numbering (`1. ACOUSTIC 2. ABILITY`) in the code don't matter, and only the first four letters of each word count, so a misspelling after that is corrected automatically. If a word is missing, extra or not on the list, the app tells you which. The passphrase is case-sensitive: it must match exactly.
+- **Older letter codes** (`ACAAA EKDQA ...`, made by versions 1.0–1.4) still decrypt; just paste them in.
+- **Length:** a short message is 48 words; each further 16 bytes of text adds about 12 words.
 - Copied results are hidden from clipboard managers (and from Windows clipboard history and cloud sync, and Android's clipboard preview) and cleared from the clipboard after 60 seconds.
-- Android only: **Paste** and **Share** buttons (Share sends only the letter code, never the numbers), and the app blocks screenshots and hides its contents in the recent-apps view.
+- Android only: **Paste** and **Share** buttons (Share sends only the code, never the decrypted text), and the app blocks screenshots and hides its contents in the recent-apps view.
 
 ## Why it's hard to crack
 
 | Layer | What it does |
 |---|---|
-| AES-256-GCM (CryptoKit on Mac, CNG on Windows, BoringSSL on Android) | Industry-standard encryption, run on the CPU's built-in AES hardware. Any altered letter is detected. |
+| AES-256-GCM (CryptoKit on Mac, CNG on Windows, BoringSSL on Android) | Industry-standard encryption, run on the CPU's built-in AES hardware. Any altered word or letter is detected. |
 | PBKDF2-SHA256, tuned to ~10 seconds | The Mac and Windows apps measure the computer and pick a round count (tens of millions on an M4) so deriving the key takes ~10 s; Android counts 10 s of actual work (see above). The count is stored in the code, so any device can decrypt it. Every passphrase guess costs an attacker that same work. |
 | Random 16-byte salt + nonce | Encrypting the same numbers twice gives completely different codes, so patterns leak nothing. |
-| Padding to 16-byte blocks | The code length doesn't reveal exactly how many digits you encrypted. |
-| Letters A–R without I and O | Unambiguous when written down or read aloud. |
+| Padding to 16-byte blocks | The code length doesn't reveal exactly how long your text is. |
+| Words from the BIP39 list | 2,048 common, distinct English words (the list used for cryptocurrency recovery phrases), each carrying 11 bits. Easy to write down or read aloud, and no two words share their first four letters. The words are just a way of writing the encrypted bytes: they add no strength and remove none. |
 
 **The passphrase is the only real weak point.** Use 4+ random words or 14+ mixed characters. There is no recovery if you forget it.
 
@@ -79,10 +91,11 @@ Because each code stores its round count, a code made on a fast device takes pro
 
 ```bash
 pip3 install cryptography
-python3 recover.py decrypt "ABPJB MHPDB ..."
+python3 recover.py decrypt "ACOUSTIC ABILITY CEILING ..."
+python3 recover.py decrypt -          # paste a long code, then Ctrl+D
 ```
 
-Codes made by version 1.0 (fixed 2,000,000 rounds) still decrypt in both the app and `recover.py`.
+It contains the word list and a full description of the format, and also reads older letter codes, including those from version 1.0 (fixed 2,000,000 rounds).
 
 Keep a copy of it with your backups so your codes never depend on this one app.
 
