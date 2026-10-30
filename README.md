@@ -69,13 +69,13 @@ Because each code stores its round count, a code made on a fast device takes pro
 - **Older letter codes** (`ACAAA EKDQA ...`, made by versions 1.0–1.4) still decrypt; just paste them in.
 - **Length:** a short message is 48 words; each further 16 bytes of text adds about 12 words.
 - Copied results are hidden from clipboard managers (and from Windows clipboard history and cloud sync, and Android's clipboard preview) and cleared from the clipboard after 60 seconds.
-- Android only: **Paste** and **Share** buttons (Share sends only the letter code, never the numbers), and the app blocks screenshots and hides its contents in the recent-apps view.
+- Android only: **Paste** and **Share** buttons (Share sends only the code, never the decrypted text), and the app blocks screenshots and hides its contents in the recent-apps view.
 
 ## Why it's hard to crack
 
 | Layer | What it does |
 |---|---|
-| AES-256-GCM (CryptoKit on Mac, CNG on Windows, BoringSSL on Android) | Industry-standard encryption, run on the CPU's built-in AES hardware. Any altered letter is detected. |
+| AES-256-GCM (CryptoKit on Mac, CNG on Windows, BoringSSL on Android) | Industry-standard encryption, run on the CPU's built-in AES hardware. Any altered word or letter is detected. |
 | PBKDF2-SHA256, tuned to ~10 seconds | The Mac and Windows apps measure the computer and pick a round count (tens of millions on an M4) so deriving the key takes ~10 s; Android counts 10 s of actual work (see above). The count is stored in the code, so any device can decrypt it. Every passphrase guess costs an attacker that same work. |
 | Random 16-byte salt + nonce | Encrypting the same numbers twice gives completely different codes, so patterns leak nothing. |
 | Padding to 16-byte blocks | The code length doesn't reveal exactly how long your text is. |
