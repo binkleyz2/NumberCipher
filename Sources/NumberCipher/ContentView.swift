@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Observation
+import CipherCore
 
 // App state lives in an Observation model instead of SwiftUI @State, so the app
 // builds with the Command Line Tools alone (which don't include SwiftUI's macro plugin).

@@ -42,7 +42,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Compatibility self-tests
         run: |
-          swiftc -O Sources/NumberCipher/CipherEngine.swift Sources/NumberCipher/WordList.swift Tests/MacSelfTest/main.swift -o "$RUNNER_TEMP/selftest"
+          swiftc -O Sources/CipherCore/*.swift Tests/MacSelfTest/main.swift -o "$RUNNER_TEMP/selftest"
           "$RUNNER_TEMP/selftest"
       - run: |
           chmod +x build.sh

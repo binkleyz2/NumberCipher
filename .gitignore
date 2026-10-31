@@ -12,3 +12,7 @@ local.properties
 android/app/.cxx/
 *.jks
 *.keystore
+
+# Xcode per-user state
+xcuserdata/
+*.xcuserstate
