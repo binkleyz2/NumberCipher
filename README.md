@@ -1,6 +1,6 @@
 # Cipherwords
 
-Native apps for **Mac** (Apple Silicon, macOS 14+), **Windows** (10/11, x64 and ARM64) and **Android** (8.0+ phones, tablets, foldables and Chromebooks) that turn any text (numbers, notes, passwords, addresses, any language or emoji) into a code made of ordinary English words, and back. All three use the same code format and strength, so a code made on one decrypts on the others. (Cipherwords was called Number Cipher before version 1.5; its codes still decrypt.)
+Native apps for **Mac** (Apple Silicon, macOS 14+), **Windows** (10/11, x64 and ARM64), **Android** (8.0+ phones, tablets, foldables and Chromebooks) and **iPhone and iPad** (iOS/iPadOS 17+) that turn any text (numbers, notes, passwords, addresses, any language or emoji) into a code made of ordinary English words, and back. They all use the same code format and strength, so a code made on one decrypts on the others. (Cipherwords was called Number Cipher before version 1.5; its codes still decrypt.)
 
 ```
 ACOUSTIC ABILITY CEILING SCATTER SUBJECT PITCH
@@ -8,7 +8,7 @@ ELEMENT LIVE DAY VIEW BONE POPULAR
 ...
 ```
 
-Prebuilt downloads are on the repo's **Releases** page.
+Prebuilt Mac, Windows and Android downloads are on the repo's **Releases** page. The iPhone and iPad app is installed from Xcode (below).
 
 ## Build — Mac
 
@@ -40,7 +40,34 @@ Use `-r win-arm64` for Windows on ARM. `dotnet run --project windows/InteropTest
 
 The folders, project files and Android package still use the original internal name, `NumberCipher`. Changing the Android package name would make Android treat the app as a different one, so it couldn't update the installed app.
 
-Mac and `recover.py` tests are in `Tests/`. The **Checks** workflow runs every platform's tests on each pull request.
+Mac and `recover.py` tests are in `Tests/`; the iPhone/iPad app has a built-in self-test that GitHub runs on a simulator. The **Checks** workflow runs every platform's tests on each pull request.
+
+## Build — iPhone and iPad
+
+Apple only lets apps onto an iPhone or iPad through Xcode, TestFlight or the App Store, so you install this one from Xcode on your Mac. No jailbreak is needed, and a free Apple ID is enough.
+
+**First time (about 5 minutes):**
+
+1. On the Mac, open Xcode → **Settings → Accounts** and check that your Apple ID is listed with a **Personal Team**.
+2. Open `ios/Cipherwords.xcodeproj`.
+3. Click **Cipherwords** at the top of the file list, then the **Cipherwords** target → **Signing & Capabilities**. Under **Team**, choose your Personal Team.
+   - If Xcode says the bundle identifier is unavailable, change `io.github.binkleyz2.cipherwords` to anything unique, such as `com.yourname.cipherwords`.
+4. Connect the iPhone or iPad with a cable and unlock it. If it asks, tap **Trust This Computer**.
+5. Choose the device in the bar at the top of Xcode and press **Run** (▶ or ⌘R).
+6. The first time only, the device needs two permissions:
+   - **Developer Mode:** Settings → Privacy & Security → **Developer Mode** → on, then restart the device when asked.
+   - **Trust the developer:** Settings → General → **VPN & Device Management** → your Apple ID → **Trust**.
+
+   Then press Run again.
+
+**Free Apple ID: re-install every 7 days.** Apps signed with a free account stop opening after 7 days. Connect the device and press Run again. Nothing is lost: there's nothing stored in the app, and your codes decrypt in every other version and in `recover.py`. With the paid Apple Developer Program ($99/year) installs last a year, and TestFlight can install it on family devices without a cable.
+
+| Folder | Contents |
+|---|---|
+| `ios/Cipherwords` | The iPhone and iPad app (SwiftUI) |
+| `Sources/CipherCore` | The cipher engine, shared with the Mac app |
+
+On iPhone and iPad, copied codes stay on the device (no Universal Clipboard) and iOS erases them after 60 seconds. The app hides its contents in the app switcher and while the screen is recorded, mirrored or shared. iOS doesn't let apps block screenshots.
 
 ## Build — Android
 
@@ -66,7 +93,7 @@ Because each code stores its round count, a code made on a fast device takes pro
 
 ## Use
 
-- **Encrypt:** type or paste any text (up to 20,000 bytes, about 20,000 English characters), enter a passphrase twice, press ⌘↩ (Ctrl+Enter on Windows). Copy the word code.
+- **Encrypt:** type or paste any text (up to 20,000 bytes, about 20,000 English characters), enter a passphrase twice, press ⌘↩ (Ctrl+Enter on Windows, or the button on a phone). Copy the word code.
 - **Decrypt:** paste the word code, enter the passphrase, press ⌘↩ (Ctrl+Enter). Capitalization, line breaks, commas and numbering (`1. ACOUSTIC 2. ABILITY`) in the code don't matter, and only the first four letters of each word count, so a misspelling after that is corrected automatically. If a word is missing, extra or not on the list, the app tells you which. The passphrase is case-sensitive: it must match exactly.
 - **Older letter codes** (`ACAAA EKDQA ...`, made by versions 1.0–1.4) still decrypt; just paste them in.
 - **Length:** a short message is 48 words; each further 16 bytes of text adds about 12 words.
@@ -101,7 +128,7 @@ Keep a copy of it with your backups so your codes never depend on this one app.
 
 ## Releases
 
-To publish a new release, change the number in `VERSION` and push to `main`. GitHub builds the Mac app on an Apple Silicon Mac, the Windows app on a Windows machine and the Android APK on Linux (after running the compatibility tests), then publishes them together.
+To publish a new release, change the number in `VERSION` and push to `main`. GitHub builds the Mac app on an Apple Silicon Mac, the Windows app on a Windows machine and the Android APK on Linux (after running the compatibility tests), then publishes them together. Also set `MARKETING_VERSION` in `ios/Cipherwords.xcodeproj/project.pbxproj` to the same number (the Checks workflow fails until they match). The iPhone/iPad app isn't part of a release, since it's installed from Xcode.
 
 The Android APK is signed with the key in the `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` repository secrets. Android only installs an update over an existing app signed with the same key, so keep a backup of that keystore.
 
