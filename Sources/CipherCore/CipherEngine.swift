@@ -21,11 +21,11 @@ import Security
 /// n <= 11*words/8 with n % 16 == 1, and ceil(8n/11) must equal the word count.
 /// Written as letters (1.0–1.4, still read): each byte -> two letters from "ABCDEFGHJKLMNPQR".
 /// A code containing any letter outside that set is read as words. recover.py documents the same.
-enum CipherError: LocalizedError, Equatable {
+public enum CipherError: LocalizedError, Equatable {
     case emptyText, nullCharacter, textTooLong, emptyPassphrase, malformedCode, badFirstLetter, unsupportedVersion, authenticationFailed, internalError
     case unknownWord(String, Int), wordCount, badFirstWord, badLastWord
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .emptyText:            return "Enter some text to encrypt."
         case .nullCharacter:        return "The text contains a null character, which can't be encrypted."
@@ -44,27 +44,27 @@ enum CipherError: LocalizedError, Equatable {
     }
 }
 
-enum CipherEngine {
-    static let currentVersion: UInt8 = 2
-    static let v1Rounds: UInt32 = 2_000_000
-    static let targetSeconds: Double = 10
-    static let minRounds: UInt32 = 2_000_000
+public enum CipherEngine {
+    public static let currentVersion: UInt8 = 2
+    public static let v1Rounds: UInt32 = 2_000_000
+    public static let targetSeconds: Double = 10
+    public static let minRounds: UInt32 = 2_000_000
     /// Upper bound accepted when decrypting, so a corrupted or hostile code can't hang the app for hours.
-    static let maxRounds: UInt32 = 1_000_000_000
-    static let saltLength = 16
-    static let padBlock = 16
-    static let alphabet: [Character] = Array("ABCDEFGHJKLMNPQR")
-    static let maxTextBytes = 20_000
-    static let wordsPerLine = 6
+    public static let maxRounds: UInt32 = 1_000_000_000
+    public static let saltLength = 16
+    public static let padBlock = 16
+    public static let alphabet: [Character] = Array("ABCDEFGHJKLMNPQR")
+    public static let maxTextBytes = 20_000
+    public static let wordsPerLine = 6
     private static let wordIndex: [String: Int] = Dictionary(uniqueKeysWithValues: WordList.words.enumerated().map { ($1, $0) })
     private static let prefixIndex: [String: Int] = Dictionary(uniqueKeysWithValues: WordList.words.enumerated().map { (String($1.prefix(4)), $0) })
 
     /// Rounds that take ~10 s on this Mac. Measured once, on first use, then reused.
-    static let calibratedRounds: UInt32 = calibrate()
+    public static let calibratedRounds: UInt32 = calibrate()
 
     // MARK: Public API
 
-    static func encrypt(_ text: String, passphrase: String, rounds fixedRounds: UInt32? = nil) throws -> String {
+    public static func encrypt(_ text: String, passphrase: String, rounds fixedRounds: UInt32? = nil) throws -> String {
         let cleaned = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else { throw CipherError.emptyText }
@@ -89,7 +89,7 @@ enum CipherEngine {
         return toWords(header + combined)
     }
 
-    static func decrypt(_ code: String, passphrase: String) throws -> String {
+    public static func decrypt(_ code: String, passphrase: String) throws -> String {
         guard !passphrase.isEmpty else { throw CipherError.emptyPassphrase }
         let words = isWordCode(code)
         let bytes = [UInt8](try words ? fromWords(code) : fromLetters(code))
@@ -134,7 +134,7 @@ enum CipherEngine {
     }
 
     /// Rough time a decrypt of `code` will take on this Mac, for the UI. Nil if unreadable.
-    static func estimatedSeconds(forCode code: String) -> Double? {
+    public static func estimatedSeconds(forCode code: String) -> Double? {
         guard let bytes = try? [UInt8](decode(code)), let v = bytes.first else { return nil }
         let rounds: UInt32
         if v == 1 { rounds = v1Rounds }
@@ -192,16 +192,16 @@ enum CipherEngine {
     // MARK: Word encoding
 
     /// True if `code` has any letter outside the old letter-code alphabet, so it must be words.
-    static func isWordCode(_ code: String) -> Bool {
+    public static func isWordCode(_ code: String) -> Bool {
         code.unicodeScalars.contains { $0.isASCII && $0.properties.isAlphabetic && !alphabet.contains(Character(String($0).uppercased())) }
     }
 
     /// Reads a word code or an old letter code.
-    static func decode(_ code: String) throws -> Data {
+    public static func decode(_ code: String) throws -> Data {
         try isWordCode(code) ? fromWords(code) : fromLetters(code)
     }
 
-    static func toWords(_ data: Data) -> String {
+    public static func toWords(_ data: Data) -> String {
         var words = [String]()
         words.reserveCapacity((data.count * 8 + 10) / 11)
         var acc: UInt32 = 0, bits = 0
@@ -216,7 +216,7 @@ enum CipherEngine {
             .joined(separator: "\n")
     }
 
-    static func fromWords(_ code: String) throws -> Data {
+    public static func fromWords(_ code: String) throws -> Data {
         // Words are runs of ASCII letters; anything else (spaces, line breaks, numbering, punctuation) separates them.
         var tokens = [String](), current = ""
         for u in code.unicodeScalars {
@@ -252,7 +252,7 @@ enum CipherEngine {
 
     // MARK: Letter encoding (codes made by versions 1.0–1.4)
 
-    static func toLetters(_ data: Data) -> String {
+    public static func toLetters(_ data: Data) -> String {
         var s = String()
         s.reserveCapacity(data.count * 2)
         for b in data {
@@ -262,7 +262,7 @@ enum CipherEngine {
         return s
     }
 
-    static func fromLetters(_ code: String) throws -> Data {
+    public static func fromLetters(_ code: String) throws -> Data {
         var lookup = [Character: UInt8]()
         for (i, c) in alphabet.enumerated() { lookup[c] = UInt8(i) }
         let letters = code.uppercased().filter { !$0.isWhitespace && $0 != "-" }
@@ -277,7 +277,7 @@ enum CipherEngine {
         return out
     }
 
-    static func group(_ s: String, size: Int = 5) -> String {
+    public static func group(_ s: String, size: Int = 5) -> String {
         var result = String()
         for (i, c) in s.enumerated() {
             if i > 0 && i % size == 0 { result.append(" ") }

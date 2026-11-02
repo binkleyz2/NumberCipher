@@ -28,7 +28,7 @@ jobs:
           python-version: '3.12'
       - name: Compatibility self-tests
         run: |
-          swiftc -O Sources/NumberCipher/CipherEngine.swift Sources/NumberCipher/WordList.swift Tests/MacSelfTest/main.swift -o "$RUNNER_TEMP/selftest"
+          swiftc -O Sources/CipherCore/*.swift Tests/MacSelfTest/main.swift -o "$RUNNER_TEMP/selftest"
           "$RUNNER_TEMP/selftest"
       - name: recover.py decrypts a code made by the Mac engine
         env:
@@ -69,3 +69,48 @@ jobs:
           if [ "$got" = "Windows to recover.py 4111" ]; then echo "PASS windows -> recover.py"; else echo "FAIL: '$got'"; exit 1; fi
       - name: Build the app
         run: dotnet build windows/NumberCipher.Windows -c Release
+
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: App version matches VERSION
+        run: |
+          v=$(tr -d '[:space:]' < VERSION)
+          n=$(grep -c "MARKETING_VERSION = $v;" ios/Cipherwords.xcodeproj/project.pbxproj || true)
+          if [ "$n" != 2 ]; then echo "::error::Set MARKETING_VERSION in ios/Cipherwords.xcodeproj to $v (Debug and Release)"; exit 1; fi
+          xcodebuild -version
+      - name: Build for iPhone and iPad devices (unsigned)
+        run: |
+          xcodebuild -project ios/Cipherwords.xcodeproj -scheme Cipherwords -configuration Release \
+            -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/dd-device" \
+            CODE_SIGNING_ALLOWED=NO -quiet build
+      - name: Build for the simulator
+        run: |
+          xcodebuild -project ios/Cipherwords.xcodeproj -scheme Cipherwords -configuration Release \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/dd-sim" \
+            CODE_SIGNING_ALLOWED=NO -quiet build
+      - name: Self-test on an iPhone simulator
+        run: |
+          APP="$RUNNER_TEMP/dd-sim/Build/Products/Release-iphonesimulator/Cipherwords.app"
+          UDID=$(xcrun simctl list devices available -j | python -c "
+          import json, sys
+          d = json.load(sys.stdin)['devices']
+          print(next(x['udid'] for k, v in sorted(d.items(), reverse=True) if 'iOS' in k for x in v if x['name'].startswith('iPhone')))")
+          echo "Simulator $UDID"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl launch --console-pty "$UDID" io.github.binkleyz2.cipherwords -selftest | tr -d '\r' | tee "$RUNNER_TEMP/ios.txt"
+          grep -q "SELFTEST PASS" "$RUNNER_TEMP/ios.txt"
+      - name: recover.py decrypts a code made on the iPhone simulator
+        run: |
+          pip install --quiet cryptography
+          sed -n '/BEGIN CODE/,/END CODE/p' "$RUNNER_TEMP/ios.txt" | sed '1d;$d' > "$RUNNER_TEMP/ios_code.txt"
+          cat "$RUNNER_TEMP/ios_code.txt"
+          got=$(PYTHONIOENCODING=utf-8 python -c "import recover as r,sys; print(r.decrypt(open(sys.argv[1]).read(), 'maple orbit tundra swivel'))" "$RUNNER_TEMP/ios_code.txt")
+          if [ "$got" = "iOS → recover.py é 4111" ]; then echo "PASS ios -> recover.py"; else echo "FAIL: '$got'"; exit 1; fi

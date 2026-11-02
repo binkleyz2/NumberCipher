@@ -1,5 +1,5 @@
 // Compatibility self-test for the Mac engine. CI compiles it together with the engine:
-//   swiftc -O Sources/NumberCipher/CipherEngine.swift Sources/NumberCipher/WordList.swift Tests/MacSelfTest/main.swift -o selftest
+//   swiftc -O Sources/CipherCore/*.swift Tests/MacSelfTest/main.swift -o selftest
 //   ./selftest                  run the tests (exit 1 on failure)
 //   ./selftest encrypt <text>   (passphrase from NC_PASS, 300,000 rounds) -> prints a word code
 import Foundation

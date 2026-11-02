@@ -2,8 +2,8 @@
 /// Source: github.com/bitcoin/bips/blob/master/bip-0039/english.txt (BSD-2-Clause).
 /// SHA-256 of the original file (one word per line): 2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda
 /// It must stay identical in every app and in recover.py, or codes won't move between them.
-enum WordList {
-    static let words: [String] = """
+public enum WordList {
+    public static let words: [String] = """
     abandon ability able about above absent absorb abstract absurd abuse access accident account accuse
     achieve acid acoustic acquire across act action actor actress actual adapt add addict address adjust
     admit adult advance advice aerobic affair afford afraid again age agent agree ahead aim air airport
