@@ -62,7 +62,7 @@ bad_last = r.WORDS[last ^ 1].upper()
 check("bad last word", "last word" in error(lambda: r.decrypt(" ".join(w[:-1] + [bad_last]), PASS1)))
 check("empty text", "Enter some text" in error(lambda: r.encrypt(" \n ", PASS1, 200_000)))
 check("null character", "null character" in error(lambda: r.encrypt("a\0b", PASS1, 200_000)))
-check("too much text", "too much text" in error(lambda: r.encrypt("x" * 20_001, PASS1, 200_000)))
+check("too much text", "too much text" in error(lambda: r.encrypt("x" * 100_001, PASS1, 200_000)))
 
 print("ALL PASSED" if not failures else f"{failures} FAILED")
 sys.exit(1 if failures else 0)

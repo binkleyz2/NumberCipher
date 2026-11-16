@@ -27,7 +27,7 @@ from cryptography.exceptions import InvalidTag
 
 V1_ROUNDS, SALT, PAD = 2_000_000, 16, 16
 MIN_ROUNDS, MAX_ROUNDS, TARGET_SECONDS = 2_000_000, 1_000_000_000, 10
-MAX_TEXT_BYTES = 20_000
+MAX_TEXT_BYTES = 100_000
 ALPHA = "ABCDEFGHJKLMNPQR"
 WORDS_PER_LINE = 6
 
@@ -115,7 +115,7 @@ def clean_text(text: str) -> str:
     if "\0" in text:
         raise ValueError("The text contains a null character, which can't be encrypted.")
     if len(text.encode()) > MAX_TEXT_BYTES:
-        raise ValueError("That's too much text (the limit is 20,000 bytes, about 20,000 English characters).")
+        raise ValueError("That's too much text (the limit is 100,000 bytes, about 100,000 English characters).")
     return text
 
 

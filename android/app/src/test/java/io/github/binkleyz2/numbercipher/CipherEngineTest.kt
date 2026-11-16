@@ -135,7 +135,7 @@ class CipherEngineTest {
     @Test fun futureVersion() = assertError("newer version") { engine.decrypt("AD" + V2.substring(2), PASS2) }
     @Test fun shortLetterCode() = assertError("doesn't look like") { engine.decrypt("ABCDE", PASS2) }
     @Test fun noText() = assertError("Enter some text") { engine.encrypt(" \r\n ", PASS1) }
-    @Test fun tooMuchText() = assertError("too much text") { engine.encrypt("x".repeat(20_001), PASS1) }
+    @Test fun tooMuchText() = assertError("too much text") { engine.encrypt("x".repeat(100_001), PASS1) }
 
     @Test fun cancelStopsWork() {
         try {

@@ -60,13 +60,13 @@ class CipherEngine(
         const val TAG_LENGTH = 16
         const val PAD_BLOCK = 16
         const val ALPHABET = "ABCDEFGHJKLMNPQR"
-        const val MAX_TEXT_BYTES = 20_000
+        const val MAX_TEXT_BYTES = 100_000
         const val WORDS_PER_LINE = 6
         private const val CHUNK = 32_768
 
         const val MSG_NO_TEXT = "Enter some text to encrypt."
         const val MSG_NULL_CHAR = "The text contains a null character, which can't be encrypted."
-        const val MSG_TOO_LONG = "That's too much text (the limit is 20,000 bytes, about 20,000 English characters)."
+        const val MSG_TOO_LONG = "That's too much text (the limit is 100,000 bytes, about 100,000 English characters)."
         const val MSG_WORD_COUNT = "A word seems to be missing or extra. Check the code against the original."
         const val MSG_FIRST_WORD = "The first word of the code looks wrong. Check it for a typo."
         const val MSG_LAST_WORD = "The last word of the code looks wrong. Check it for a typo."

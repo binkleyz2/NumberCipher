@@ -77,7 +77,7 @@ char[] t = v2.ToCharArray(); int k = 60; t[k] = t[k] == 'A' ? 'B' : 'A';
 Check("altered letter rejected", Throws(() => CipherEngine.Decrypt(new string(t), pass2), "Wrong passphrase"));
 Check("first letter typo (letter code)", Throws(() => CipherEngine.Decrypt("B" + v2[1..], pass2), "always A"));
 Check("empty text rejected", Throws(() => CipherEngine.Encrypt(" \r\n ", pass), "Enter some text"));
-Check("too much text rejected", Throws(() => CipherEngine.Encrypt(new string('x', 20_001), pass), "too much text"));
+Check("too much text rejected", Throws(() => CipherEngine.Encrypt(new string('x', 100_001), pass), "too much text"));
 Check("estimate reads word codes", CipherEngine.EstimatedSeconds(words) is not null);
 
 var sw = System.Diagnostics.Stopwatch.StartNew();

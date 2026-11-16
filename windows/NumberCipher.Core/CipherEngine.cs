@@ -43,7 +43,7 @@ public static class CipherEngine
     public const int TagLength = 16;
     public const int PadBlock = 16;
     public const string Alphabet = "ABCDEFGHJKLMNPQR";
-    public const int MaxTextBytes = 20_000;
+    public const int MaxTextBytes = 100_000;
     public const int WordsPerLine = 6;
 
     private static readonly Dictionary<string, int> wordIndex =
@@ -67,7 +67,7 @@ public static class CipherEngine
         if (cleaned.Contains('\0'))
             throw new CipherException("The text contains a null character, which can't be encrypted.");
         if (Encoding.UTF8.GetByteCount(cleaned) > MaxTextBytes)
-            throw new CipherException("That's too much text (the limit is 20,000 bytes, about 20,000 English characters).");
+            throw new CipherException("That's too much text (the limit is 100,000 bytes, about 100,000 English characters).");
         if (passphrase.Length == 0)
             throw new CipherException("Enter a passphrase.");
 
