@@ -21,7 +21,7 @@ internal sealed class MainForm : Form
     private readonly TextBox input = new()
     {
         Multiline = true, AcceptsReturn = true, ScrollBars = ScrollBars.Vertical,
-        Font = Body, Dock = DockStyle.Fill, MinimumSize = new Size(0, 90),
+        Font = Body, Dock = DockStyle.Fill, MinimumSize = new Size(0, 90), MaxLength = 0,
     };
     private readonly TextBox passphrase = new() { UseSystemPasswordChar = true, PlaceholderText = "Passphrase", Dock = DockStyle.Fill };
     private readonly TextBox confirm = new() { UseSystemPasswordChar = true, PlaceholderText = "Confirm passphrase", Dock = DockStyle.Fill };
@@ -44,7 +44,7 @@ internal sealed class MainForm : Form
     private readonly TextBox output = new()
     {
         Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical,
-        Font = Mono, Dock = DockStyle.Fill, MinimumSize = new Size(0, 80), BackColor = SystemColors.Window,
+        Font = Mono, Dock = DockStyle.Fill, MinimumSize = new Size(0, 80), BackColor = SystemColors.Window, MaxLength = 0,
     };
     private readonly TableLayoutPanel outputPanel = new() { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Visible = false };
 
