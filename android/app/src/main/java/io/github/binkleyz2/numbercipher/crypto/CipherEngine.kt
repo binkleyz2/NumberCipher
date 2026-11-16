@@ -60,13 +60,12 @@ class CipherEngine(
         const val TAG_LENGTH = 16
         const val PAD_BLOCK = 16
         const val ALPHABET = "ABCDEFGHJKLMNPQR"
-        const val MAX_TEXT_BYTES = 100_000
         const val WORDS_PER_LINE = 6
         private const val CHUNK = 32_768
 
         const val MSG_NO_TEXT = "Enter some text to encrypt."
         const val MSG_NULL_CHAR = "The text contains a null character, which can't be encrypted."
-        const val MSG_TOO_LONG = "That's too much text (the limit is 100,000 bytes, about 100,000 English characters)."
+
         const val MSG_WORD_COUNT = "A word seems to be missing or extra. Check the code against the original."
         const val MSG_FIRST_WORD = "The first word of the code looks wrong. Check it for a typo."
         const val MSG_LAST_WORD = "The last word of the code looks wrong. Check it for a typo."
@@ -197,7 +196,7 @@ class CipherEngine(
         if (cleaned.isEmpty()) throw CipherException(MSG_NO_TEXT)
         if ('\u0000' in cleaned) throw CipherException(MSG_NULL_CHAR)
         val utf8 = cleaned.toByteArray(Charsets.UTF_8)
-        if (utf8.size > MAX_TEXT_BYTES) { utf8.fill(0); throw CipherException(MSG_TOO_LONG) }
+
         if (passphrase.isEmpty()) { utf8.fill(0); throw CipherException(MSG_NO_PASSPHRASE) }
 
         val plain = utf8.copyOf((utf8.size / PAD_BLOCK + 1) * PAD_BLOCK)

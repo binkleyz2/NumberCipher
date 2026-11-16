@@ -22,14 +22,14 @@ import Security
 /// Written as letters (1.0–1.4, still read): each byte -> two letters from "ABCDEFGHJKLMNPQR".
 /// A code containing any letter outside that set is read as words. recover.py documents the same.
 public enum CipherError: LocalizedError, Equatable {
-    case emptyText, nullCharacter, textTooLong, emptyPassphrase, malformedCode, badFirstLetter, unsupportedVersion, authenticationFailed, internalError
+    case emptyText, nullCharacter, emptyPassphrase, malformedCode, badFirstLetter, unsupportedVersion, authenticationFailed, internalError
     case unknownWord(String, Int), wordCount, badFirstWord, badLastWord
 
     public var errorDescription: String? {
         switch self {
         case .emptyText:            return "Enter some text to encrypt."
         case .nullCharacter:        return "The text contains a null character, which can't be encrypted."
-        case .textTooLong:          return "That's too much text (the limit is 100,000 bytes, about 100,000 English characters)."
+
         case .unknownWord(let w, let i): return "\u{201C}\(w)\u{201D} (word \(i)) isn't one of the code words. Check its spelling."
         case .wordCount:            return "A word seems to be missing or extra. Check the code against the original."
         case .badFirstWord:         return "The first word of the code looks wrong. Check it for a typo."
@@ -54,7 +54,7 @@ public enum CipherEngine {
     public static let saltLength = 16
     public static let padBlock = 16
     public static let alphabet: [Character] = Array("ABCDEFGHJKLMNPQR")
-    public static let maxTextBytes = 100_000
+
     public static let wordsPerLine = 6
     private static let wordIndex: [String: Int] = Dictionary(uniqueKeysWithValues: WordList.words.enumerated().map { ($1, $0) })
     private static let prefixIndex: [String: Int] = Dictionary(uniqueKeysWithValues: WordList.words.enumerated().map { (String($1.prefix(4)), $0) })
@@ -69,7 +69,7 @@ public enum CipherEngine {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else { throw CipherError.emptyText }
         guard !cleaned.unicodeScalars.contains("\u{0}") else { throw CipherError.nullCharacter }
-        guard cleaned.utf8.count <= maxTextBytes else { throw CipherError.textTooLong }
+
         guard !passphrase.isEmpty else { throw CipherError.emptyPassphrase }
 
         var plain = Array(cleaned.utf8)
