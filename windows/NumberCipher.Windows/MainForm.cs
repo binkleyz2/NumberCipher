@@ -51,6 +51,10 @@ internal sealed class MainForm : Form
     private readonly System.Windows.Forms.Timer progressTimer = new() { Interval = 200 };
     private readonly System.Windows.Forms.Timer clipboardTimer = new() { Interval = 60_000 };
 
+    private readonly Label shellStatusLabel = new() { AutoSize = true, ForeColor = SystemColors.GrayText };
+    private readonly Button registerButton = new() { Text = "Register", AutoSize = true, MinimumSize = new Size(100, 28), FlatStyle = FlatStyle.System };
+    private readonly Button unregisterButton = new() { Text = "Unregister", AutoSize = true, MinimumSize = new Size(100, 28), FlatStyle = FlatStyle.System };
+
     private bool busy;
     private Stopwatch? workClock;
     private double estimate;
@@ -101,8 +105,14 @@ internal sealed class MainForm : Form
             Text = "AES-256-GCM · PBKDF2-SHA256 tuned to ~10 s on this PC · every encryption is unique",
         };
 
-        // Rows: mode, label, input(%), pass, confirm, strength, buttons, work, error, output(%), footer
-        Control[] rows = [modeRow, inputLabel, input, passphrase, confirm, strengthRow, buttonRow, workPanel, errorLabel, outputPanel, footer];
+        var shellHeading = Heading("File Explorer integration");
+        shellHeading.Margin = new Padding(0, 14, 0, 2);
+        var shellButtons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(0, 4, 0, 0) };
+        shellButtons.Controls.AddRange([registerButton, unregisterButton, shellStatusLabel]);
+        shellStatusLabel.Margin = new Padding(10, 6, 0, 0);
+
+        // Rows: mode, label, input(%), pass, confirm, strength, buttons, work, error, output(%), footer, shell
+        Control[] rows = [modeRow, inputLabel, input, passphrase, confirm, strengthRow, buttonRow, workPanel, errorLabel, outputPanel, footer, shellHeading, shellButtons];
         foreach (Control row in rows)
         {
             bool grows = row == input || row == outputPanel;
@@ -122,9 +132,12 @@ internal sealed class MainForm : Form
         copyButton.Click += (_, _) => CopyOutput();
         progressTimer.Tick += (_, _) => UpdateProgress();
         clipboardTimer.Tick += (_, _) => ClearClipboardIfUnchanged();
+        registerButton.Click += (_, _) => ShellAction(register: true);
+        unregisterButton.Click += (_, _) => ShellAction(register: false);
 
         AcceptButton = null; // Enter makes new lines in the text box; Ctrl+Enter runs.
         UpdateState();
+        UpdateShellStatus();
     }
 
     private static Label Heading(string text) => new()
@@ -292,6 +305,28 @@ internal sealed class MainForm : Form
     }
 
     private void ResetCopyButton() => copyButton.Text = "Copy";
+
+    private void UpdateShellStatus()
+    {
+        bool registered = ShellRegistration.IsRegistered();
+        shellStatusLabel.Text = registered ? "✓ Registered" : "Not registered";
+        shellStatusLabel.ForeColor = registered ? GoodColor : SystemColors.GrayText;
+        registerButton.Enabled = !registered;
+        unregisterButton.Enabled = registered;
+    }
+
+    private void ShellAction(bool register)
+    {
+        try
+        {
+            if (register) ShellRegistration.Register(); else ShellRegistration.Unregister();
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Shell integration: {ex.Message}");
+        }
+        UpdateShellStatus();
+    }
 
     private void ClearAll()
     {

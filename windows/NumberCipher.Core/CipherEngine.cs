@@ -139,6 +139,87 @@ public static class CipherEngine
         }
     }
 
+    /// <summary>Encrypts arbitrary file bytes. Stores a 4-byte length prefix so DecryptFile recovers exact bytes.</summary>
+    public static string EncryptFile(byte[] data, string passphrase, int? rounds = null)
+    {
+        if (passphrase.Length == 0)
+            throw new CipherException("Enter a passphrase.");
+        if (data.LongLength > 0x0FFF_FFFF)
+            throw new CipherException("File is too large to encrypt.");
+
+        int r = rounds ?? CalibratedRounds;
+        // 4-byte big-endian length prefix so trailing null bytes survive the round-trip
+        int contentLen = 4 + data.Length;
+        byte[] plain = new byte[(contentLen / PadBlock + 1) * PadBlock];
+        BinaryPrimitives.WriteUInt32BigEndian(plain.AsSpan(0, 4), (uint)data.Length);
+        data.CopyTo(plain, 4);
+
+        byte[] salt = RandomNumberGenerator.GetBytes(SaltLength);
+        byte[] header = new byte[1 + 4 + SaltLength];
+        header[0] = CurrentVersion;
+        BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(1, 4), (uint)r);
+        salt.CopyTo(header, 5);
+
+        byte[] key = DeriveKey(passphrase, salt, r);
+        byte[] nonce = RandomNumberGenerator.GetBytes(NonceLength);
+        byte[] output = new byte[header.Length + NonceLength + plain.Length + TagLength];
+        try
+        {
+            using var aes = new AesGcm(key, TagLength);
+            aes.Encrypt(nonce, plain,
+                output.AsSpan(header.Length + NonceLength, plain.Length),
+                output.AsSpan(output.Length - TagLength, TagLength),
+                header);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(key);
+            CryptographicOperations.ZeroMemory(plain);
+        }
+        header.CopyTo(output, 0);
+        nonce.CopyTo(output, header.Length);
+        return ToWords(output);
+    }
+
+    /// <summary>Decrypts a code produced by <see cref="EncryptFile"/>, returning the original bytes.</summary>
+    public static byte[] DecryptFile(string code, string passphrase)
+    {
+        if (passphrase.Length == 0)
+            throw new CipherException("Enter a passphrase.");
+        bool words = IsWordCode(code);
+        byte[] bytes = words ? FromWords(code) : FromLetters(code);
+        (int headerLength, int rounds) = ReadHeader(bytes, words);
+        if (bytes.Length < headerLength + NonceLength + TagLength) throw Malformed();
+
+        ReadOnlySpan<byte> all = bytes;
+        ReadOnlySpan<byte> header = all[..headerLength];
+        byte[] salt = all[(headerLength - SaltLength)..headerLength].ToArray();
+        ReadOnlySpan<byte> nonce = all.Slice(headerLength, NonceLength);
+        ReadOnlySpan<byte> tag = all[^TagLength..];
+        ReadOnlySpan<byte> cipher = all[(headerLength + NonceLength)..^TagLength];
+
+        byte[] key = DeriveKey(passphrase, salt, rounds);
+        byte[] plain = new byte[cipher.Length];
+        try
+        {
+            using var aes = new AesGcm(key, TagLength);
+            aes.Decrypt(nonce, cipher, tag, plain, header);
+            if (plain.Length < 4) throw Malformed();
+            uint len = BinaryPrimitives.ReadUInt32BigEndian(plain.AsSpan(0, 4));
+            if (len > plain.Length - 4) throw Malformed();
+            return plain[4..(int)(4 + len)];
+        }
+        catch (Exception e) when (e is CryptographicException or ArgumentException)
+        {
+            throw new CipherException("Wrong passphrase, or the file was altered.");
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(key);
+            CryptographicOperations.ZeroMemory(plain);
+        }
+    }
+
     /// <summary>Rough time a decrypt of <paramref name="code"/> will take here, for the UI. Null if unreadable.</summary>
     public static double? EstimatedSeconds(string code)
     {
