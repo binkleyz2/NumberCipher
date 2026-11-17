@@ -67,22 +67,28 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Compatibility self-tests
         run: dotnet run --project windows/InteropTest -c Release
-      - name: Build x64 and ARM64 (full and small editions)
+      - name: Build x64 and ARM64 (portable and setup)
         run: |
+          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          CWD=$(pwd -W 2>/dev/null || cygpath -m "$(pwd)")
           for arch in x64 arm64; do
-            # Full: bundles the .NET runtime, runs on any PC with nothing installed.
+            # Portable: self-contained, no .NET runtime needed.
             dotnet publish windows/NumberCipher.Windows -c Release -r win-$arch --self-contained \
               -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
               -p:EnableCompressionInSingleFile=true -p:PublishReadyToRun=true \
               -p:Version=${{ needs.check.outputs.version }} \
               -o out/$arch
-            cp out/$arch/Cipherwords.exe Cipherwords-Windows-$arch.exe
-            # Small: uses the PC's installed .NET Desktop Runtime (10 or newer).
+            cp out/$arch/Cipherwords.exe Cipherwords-Windows-$arch-portable.exe
+            # Setup: small edition (requires .NET Desktop Runtime 10+), packaged as installer.
             dotnet publish windows/NumberCipher.Windows -c Release -r win-$arch --self-contained false \
               -p:PublishSingleFile=true \
               -p:Version=${{ needs.check.outputs.version }} \
               -o out/$arch-small
-            cp out/$arch-small/Cipherwords.exe Cipherwords-Windows-$arch-small.exe
+            "$ISCC" /O. \
+              "/DAppVersion=${{ needs.check.outputs.version }}" \
+              "/DExeSource=$CWD/out/$arch-small/Cipherwords.exe" \
+              "/DOutputBasename=Cipherwords-Windows-$arch-setup" \
+              windows/Cipherwords.iss
           done
           ls -l Cipherwords-Windows-*.exe
       - uses: actions/upload-artifact@v4
@@ -156,10 +162,10 @@ jobs:
           | Download | For |
           |---|---|
           | `Cipherwords-macOS-arm64.zip` | Mac with Apple Silicon (M1–M4 and newer), macOS 14+ |
-          | `Cipherwords-Windows-x64.exe` | Most Windows 10/11 PCs (Intel or AMD) |
-          | `Cipherwords-Windows-arm64.exe` | Windows on ARM (Snapdragon, Surface Pro X, etc.) |
-          | `Cipherwords-Windows-x64-small.exe` | Small edition for Intel/AMD PCs that have the [.NET Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) 10 or newer installed |
-          | `Cipherwords-Windows-arm64-small.exe` | Small edition for Windows on ARM, same requirement |
+          | `Cipherwords-Windows-x64-setup.exe` | Most Windows 10/11 PCs (Intel or AMD) — **recommended**, installs with Start Menu shortcut and File Explorer integration |
+          | `Cipherwords-Windows-x64-portable.exe` | Most Windows 10/11 PCs — standalone, no install needed, includes everything |
+          | `Cipherwords-Windows-arm64-setup.exe` | Windows on ARM (Snapdragon, Surface Pro X, etc.) — installer |
+          | `Cipherwords-Windows-arm64-portable.exe` | Windows on ARM — standalone portable |
           | `Cipherwords-Android.apk` | Android 8.0+ phones, tablets, foldables and Chromebooks |
           | `recover.py` | Decrypts codes on any computer with Python (`pip3 install cryptography`) |
 
@@ -167,9 +173,16 @@ jobs:
           Since 1.5 the apps are called Cipherwords (formerly Number Cipher), encrypt any text and
           write codes as English words; letter codes made by earlier versions still decrypt.
 
-          **Full or small Windows edition?** Both are the same app. The full edition includes everything
-          it needs. The small edition is a fraction of the size but needs Microsoft's free .NET Desktop
-          Runtime; if it's missing, Windows shows a message with a download link the first time you open it.
+          **Setup or portable?** The setup installer adds a Start Menu shortcut, an uninstall entry in
+          Add/Remove Programs, and automatically registers the File Explorer context menu so you can
+          right-click any document to encrypt it. The portable exe is a single file you can run from
+          anywhere — it includes a Register/Unregister button in the app to add or remove the context
+          menu yourself. The setup installer requires the free [.NET Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)
+          10 or newer; the portable exe includes everything it needs.
+
+          **File Explorer integration** (setup installer only, automatic): right-click any `.docx`,
+          `.pdf`, `.xlsx`, `.csv`, `.txt` and many other document types to encrypt them directly.
+          Double-click any `.cipherwords` file to decrypt it.
 
           **First launch.** None of the apps come from an app store yet.
           - Mac: right-click **Cipherwords.app** → **Open**, then confirm.

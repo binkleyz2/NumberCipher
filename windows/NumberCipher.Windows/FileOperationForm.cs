@@ -24,6 +24,11 @@ internal sealed class FileOperationForm : Form
     private readonly Label workLabel = new() { AutoSize = true, ForeColor = SystemColors.GrayText };
     private readonly TableLayoutPanel workPanel = new() { AutoSize = true, Dock = DockStyle.Fill, ColumnCount = 1, Visible = false };
     private readonly Label resultLabel = new() { AutoSize = true, Visible = false, MaximumSize = new Size(500, 0) };
+    private readonly Button deleteButton = new()
+    {
+        Text = "Securely delete original…", AutoSize = true, MinimumSize = new Size(190, 28),
+        FlatStyle = FlatStyle.System, Visible = false, Margin = new Padding(0, 4, 0, 0),
+    };
 
     private bool busy;
     private Stopwatch? workClock;
@@ -77,7 +82,7 @@ internal sealed class FileOperationForm : Form
 
         Control[] rows = isDecrypt
             ? [fileLabel, passphrase, workPanel, resultLabel, buttonRow]
-            : [fileLabel, passphrase, confirm, strengthRow, workPanel, resultLabel, buttonRow];
+            : [fileLabel, passphrase, confirm, strengthRow, workPanel, resultLabel, deleteButton, buttonRow];
 
         foreach (Control row in rows)
         {
@@ -92,6 +97,7 @@ internal sealed class FileOperationForm : Form
         runButton.Click += (_, _) => Run();
         cancelButton.Click += (_, _) => { if (!busy) Close(); };
         progressTimer.Tick += (_, _) => UpdateProgress();
+        deleteButton.Click += (_, _) => SecureDelete();
 
         AcceptButton = runButton;
         UpdateState();
@@ -155,6 +161,7 @@ internal sealed class FileOperationForm : Form
                 string outPath = GetEncryptOutputPath(filePath);
                 await Task.Run(() => File.WriteAllText(outPath, code, new UTF8Encoding(false)));
                 ShowResult($"Saved: {Path.GetFileName(outPath)}", error: false);
+                deleteButton.Visible = true;
             }
         }
         catch (CipherException ex) { ShowResult(ex.Message, error: true); }
@@ -184,6 +191,47 @@ internal sealed class FileOperationForm : Form
         workBar.Value = (int)(Math.Min(elapsed / estimate, 1) * workBar.Maximum);
         int remaining = (int)Math.Ceiling(estimate - elapsed);
         workLabel.Text = remaining > 1 ? $"Strengthening key — about {remaining} s left" : "Finishing…";
+    }
+
+    private async void SecureDelete()
+    {
+        string name = Path.GetFileName(filePath);
+        var confirm = MessageBox.Show(
+            $"Overwrite \"{name}\" with random data, then delete it?\n\n" +
+            "Note: on SSDs or cloud-synced folders the original data may still be recoverable " +
+            "even after overwriting.",
+            "Securely delete original",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+        if (confirm != DialogResult.Yes) return;
+
+        deleteButton.Enabled = false;
+        try
+        {
+            await Task.Run(() =>
+            {
+                long size = new FileInfo(filePath).Length;
+                using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Write, FileShare.None))
+                {
+                    byte[] buf = new byte[Math.Min(65536, (int)Math.Max(size, 1))];
+                    long remaining = size;
+                    while (remaining > 0)
+                    {
+                        int chunk = (int)Math.Min(buf.Length, remaining);
+                        System.Security.Cryptography.RandomNumberGenerator.Fill(buf.AsSpan(0, chunk));
+                        fs.Write(buf, 0, chunk);
+                        remaining -= chunk;
+                    }
+                    fs.Flush();
+                }
+                File.Delete(filePath);
+            });
+            deleteButton.Text = "✓ Deleted";
+        }
+        catch (Exception ex)
+        {
+            deleteButton.Enabled = true;
+            ShowResult($"Could not delete: {ex.Message}", error: true);
+        }
     }
 
     private static string GetEncryptOutputPath(string sourcePath)
