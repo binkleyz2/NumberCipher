@@ -68,29 +68,26 @@ jobs:
       - name: Compatibility self-tests
         run: dotnet run --project windows/InteropTest -c Release
       - name: Build x64 and ARM64 (portable and setup)
+        shell: pwsh
         run: |
-          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
-          CWD=$(pwd -W 2>/dev/null || cygpath -m "$(pwd)")
-          for arch in x64 arm64; do
+          $ISCC = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          $ver  = "${{ needs.check.outputs.version }}"
+          foreach ($arch in @("x64", "arm64")) {
             # Portable: self-contained, no .NET runtime needed.
-            dotnet publish windows/NumberCipher.Windows -c Release -r win-$arch --self-contained \
-              -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
-              -p:EnableCompressionInSingleFile=true -p:PublishReadyToRun=true \
-              -p:Version=${{ needs.check.outputs.version }} \
-              -o out/$arch
-            cp out/$arch/Cipherwords.exe Cipherwords-Windows-$arch-portable.exe
+            dotnet publish windows/NumberCipher.Windows -c Release -r win-$arch --self-contained `
+              -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+              -p:EnableCompressionInSingleFile=true -p:PublishReadyToRun=true `
+              "-p:Version=$ver" -o out/$arch
+            Copy-Item "out/$arch/Cipherwords.exe" "Cipherwords-Windows-$arch-portable.exe"
             # Setup: small edition (requires .NET Desktop Runtime 10+), packaged as installer.
-            dotnet publish windows/NumberCipher.Windows -c Release -r win-$arch --self-contained false \
-              -p:PublishSingleFile=true \
-              -p:Version=${{ needs.check.outputs.version }} \
-              -o out/$arch-small
-            "$ISCC" /O. \
-              "/DAppVersion=${{ needs.check.outputs.version }}" \
-              "/DExeSource=$CWD/out/$arch-small/Cipherwords.exe" \
-              "/DOutputBasename=Cipherwords-Windows-$arch-setup" \
-              windows/Cipherwords.iss
-          done
-          ls -l Cipherwords-Windows-*.exe
+            dotnet publish windows/NumberCipher.Windows -c Release -r win-$arch --self-contained false `
+              -p:PublishSingleFile=true "-p:Version=$ver" -o "out/$arch-small"
+            & $ISCC "/DAppVersion=$ver" `
+                    "/DExeSource=$pwd\out\$arch-small\Cipherwords.exe" `
+                    "/DOutputBasename=Cipherwords-Windows-$arch-setup" `
+                    /O. windows\Cipherwords.iss
+          }
+          Get-ChildItem Cipherwords-Windows-*.exe
       - uses: actions/upload-artifact@v4
         with:
           name: windows
