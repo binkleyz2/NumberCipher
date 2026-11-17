@@ -26,6 +26,8 @@ internal static class ShellRegistration
     private const string ProgId = "Cipherwords.EncryptedFile";
     private const string VerbName = "Encrypt with Cipherwords";
     private const string VerbKey = @"shell\Encrypt with Cipherwords\command";
+    // SystemFileAssociations is where Windows reads verbs for file types (used by 7-Zip, etc.)
+    private const string SfaBase = @"Software\Classes\SystemFileAssociations";
 
     public static bool IsRegistered()
     {
@@ -55,10 +57,10 @@ internal static class ShellRegistration
             icon.SetValue("", $"\"{exe}\",0");
         }
 
-        // "Encrypt with Cipherwords" verb on each supported extension
+        // "Encrypt with Cipherwords" verb — registered under SystemFileAssociations so Windows shows it
         foreach (string ext in Extensions)
         {
-            using var key = Registry.CurrentUser.CreateSubKey($@"Software\Classes\{ext}\{VerbKey}");
+            using var key = Registry.CurrentUser.CreateSubKey($@"{SfaBase}\{ext}\{VerbKey}");
             key.SetValue("", $"\"{exe}\" --encrypt \"%1\"");
         }
 
@@ -73,6 +75,11 @@ internal static class ShellRegistration
         {
             try
             {
+                // Remove from SystemFileAssociations (current location)
+                Registry.CurrentUser.DeleteSubKeyTree(
+                    $@"{SfaBase}\{ext}\shell\{VerbName}",
+                    throwOnMissingSubKey: false);
+                // Also clean up the old location from earlier registrations
                 Registry.CurrentUser.DeleteSubKeyTree(
                     $@"Software\Classes\{ext}\shell\{VerbName}",
                     throwOnMissingSubKey: false);
