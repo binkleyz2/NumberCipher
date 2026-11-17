@@ -38,7 +38,7 @@ internal static class ShellRegistration
     public static void Register()
     {
         string exe = Environment.ProcessPath
-            ?? System.Reflection.Assembly.GetExecutingAssembly().Location;
+            ?? Environment.GetCommandLineArgs()[0];
 
         // .cipherwords association → open with app to decrypt
         using (var cwKey = Registry.CurrentUser.CreateSubKey(@"Software\Classes\.cipherwords"))
